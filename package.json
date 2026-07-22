@@ -1,0 +1,435 @@
+{
+  "name": "vscode-search-history",
+  "displayName": "Search History Explorer",
+  "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "publisher": "ActiveClientMods",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ActiveClientMods/vscode-search-history.git"
+  },
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "search",
+    "history",
+    "find in files",
+    "regex",
+    "favorites"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "searchHistory",
+          "title": "Search History",
+          "icon": "media/search-history.svg"
+        }
+      ]
+    },
+    "views": {
+      "searchHistory": [
+        {
+          "id": "searchHistory.view",
+          "name": "History",
+          "icon": "media/search-history.svg",
+          "contextualTitle": "Search History"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "searchHistory.view",
+        "contents": "No searches have been saved yet.\n\nRun a search from here to capture the query, its flags and include/exclude patterns, then reuse it any time.\n[$(add) New Search](command:searchHistory.newSearch)\n\nEvery search you launch through this view is saved automatically."
+      }
+    ],
+    "commands": [
+      {
+        "command": "searchHistory.newSearch",
+        "title": "New Search & Save",
+        "category": "Search History",
+        "icon": "$(add)"
+      },
+      {
+        "command": "searchHistory.runEntry",
+        "title": "Run Search",
+        "category": "Search History",
+        "icon": "$(play)"
+      },
+      {
+        "command": "searchHistory.toggleFavorite",
+        "title": "Toggle Favorite",
+        "category": "Search History",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "searchHistory.editTags",
+        "title": "Edit Tags",
+        "category": "Search History",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "searchHistory.copyQuery",
+        "title": "Copy Query",
+        "category": "Search History",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "searchHistory.deleteEntry",
+        "title": "Delete Entry",
+        "category": "Search History",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "searchHistory.clearHistory",
+        "title": "Clear History…",
+        "category": "Search History",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "searchHistory.setFilter",
+        "title": "Filter History…",
+        "category": "Search History",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "searchHistory.clearFilter",
+        "title": "Clear Filter",
+        "category": "Search History",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "searchHistory.enableRegexFilter",
+        "title": "Filter: Enable Regex",
+        "category": "Search History",
+        "icon": "$(regex)"
+      },
+      {
+        "command": "searchHistory.disableRegexFilter",
+        "title": "Filter: Disable Regex",
+        "category": "Search History",
+        "icon": "$(regex)"
+      },
+      {
+        "command": "searchHistory.showFavoritesOnly",
+        "title": "Show Favorites Only",
+        "category": "Search History",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "searchHistory.showAllEntries",
+        "title": "Show All Entries",
+        "category": "Search History",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "searchHistory.useGlobalScope",
+        "title": "Show Global History",
+        "category": "Search History",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "searchHistory.useWorkspaceScope",
+        "title": "Show Workspace History",
+        "category": "Search History",
+        "icon": "$(folder-active)"
+      },
+      {
+        "command": "searchHistory.refresh",
+        "title": "Refresh",
+        "category": "Search History",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "searchHistory.addFavorite",
+        "title": "Add to Favorites",
+        "category": "Search History",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "searchHistory.removeFavorite",
+        "title": "Remove from Favorites",
+        "category": "Search History",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "searchHistory.newFolder",
+        "title": "New Folder…",
+        "category": "Search History",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "searchHistory.renameFolder",
+        "title": "Rename Folder…",
+        "category": "Search History",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "searchHistory.deleteFolder",
+        "title": "Delete Folder…",
+        "category": "Search History",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "searchHistory.moveToFolder",
+        "title": "Move to Folder…",
+        "category": "Search History",
+        "icon": "$(file-symlink-directory)"
+      },
+      {
+        "command": "searchHistory.filterByTag",
+        "title": "Filter by Tag…",
+        "category": "Search History",
+        "icon": "$(tag)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "searchHistory.filterMenu",
+        "label": "Filter & Sort",
+        "icon": "$(filter)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "searchHistory.runEntry",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.toggleFavorite",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.addFavorite",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.removeFavorite",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.editTags",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.copyQuery",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.deleteEntry",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.moveToFolder",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.renameFolder",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.deleteFolder",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "searchHistory.newSearch",
+          "when": "view == searchHistory.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "searchHistory.newFolder",
+          "when": "view == searchHistory.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "searchHistory.useWorkspaceScope",
+          "when": "view == searchHistory.view && searchHistory.scope == global && searchHistory.hasWorkspace",
+          "group": "navigation@3"
+        },
+        {
+          "command": "searchHistory.useGlobalScope",
+          "when": "view == searchHistory.view && searchHistory.scope == workspace",
+          "group": "navigation@3"
+        },
+        {
+          "submenu": "searchHistory.filterMenu",
+          "when": "view == searchHistory.view",
+          "group": "navigation@4"
+        },
+        {
+          "command": "searchHistory.refresh",
+          "when": "view == searchHistory.view",
+          "group": "1_more@1"
+        },
+        {
+          "command": "searchHistory.clearHistory",
+          "when": "view == searchHistory.view",
+          "group": "9_danger@1"
+        }
+      ],
+      "searchHistory.filterMenu": [
+        {
+          "command": "searchHistory.setFilter",
+          "group": "1_text@1"
+        },
+        {
+          "command": "searchHistory.enableRegexFilter",
+          "when": "!searchHistory.filterRegex",
+          "group": "1_text@2"
+        },
+        {
+          "command": "searchHistory.disableRegexFilter",
+          "when": "searchHistory.filterRegex",
+          "group": "1_text@2"
+        },
+        {
+          "command": "searchHistory.filterByTag",
+          "group": "2_refine@1"
+        },
+        {
+          "command": "searchHistory.showFavoritesOnly",
+          "when": "!searchHistory.favoritesOnly",
+          "group": "2_refine@2"
+        },
+        {
+          "command": "searchHistory.showAllEntries",
+          "when": "searchHistory.favoritesOnly",
+          "group": "2_refine@2"
+        },
+        {
+          "command": "searchHistory.clearFilter",
+          "when": "searchHistory.hasFilter",
+          "group": "9_clear@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "searchHistory.runEntry",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "inline@1"
+        },
+        {
+          "command": "searchHistory.addFavorite",
+          "when": "view == searchHistory.view && viewItem == searchEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "searchHistory.removeFavorite",
+          "when": "view == searchHistory.view && viewItem == searchEntry.favorite",
+          "group": "inline@2"
+        },
+        {
+          "command": "searchHistory.moveToFolder",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "searchHistory.editTags",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "searchHistory.copyQuery",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "searchHistory.addFavorite",
+          "when": "view == searchHistory.view && viewItem == searchEntry",
+          "group": "1_edit@4"
+        },
+        {
+          "command": "searchHistory.removeFavorite",
+          "when": "view == searchHistory.view && viewItem == searchEntry.favorite",
+          "group": "1_edit@4"
+        },
+        {
+          "command": "searchHistory.deleteEntry",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "9_danger@1"
+        },
+        {
+          "command": "searchHistory.renameFolder",
+          "when": "view == searchHistory.view && viewItem == searchFolder",
+          "group": "inline@1"
+        },
+        {
+          "command": "searchHistory.deleteFolder",
+          "when": "view == searchHistory.view && viewItem == searchFolder",
+          "group": "inline@2"
+        },
+        {
+          "command": "searchHistory.renameFolder",
+          "when": "view == searchHistory.view && viewItem == searchFolder",
+          "group": "1_folder@1"
+        },
+        {
+          "command": "searchHistory.deleteFolder",
+          "when": "view == searchHistory.view && viewItem == searchFolder",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Search History Explorer",
+      "properties": {
+        "searchHistory.maxEntries": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 50,
+          "maximum": 100000,
+          "markdownDescription": "Maximum number of search entries to retain. Favorites are kept even when the limit is reached; the oldest non-favorite entries are pruned first."
+        },
+        "searchHistory.deduplicate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When enabled, re-running an identical search (same query, flags and include/exclude patterns in the same workspace) updates the existing entry instead of creating a duplicate."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run package",
+    "compile": "bun run check-types && bun run lint && bun esbuild.js",
+    "watch:esbuild": "bun esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "watch": "bun run watch:esbuild & bun run watch:tsc",
+    "package": "bun run check-types && bun run lint && bun esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "bun run compile-tests && bun run compile",
+    "check-types": "tsc --noEmit",
+    "lint": "oxlint src",
+    "test": "vscode-test",
+    "vsce:package": "bunx @vscode/vsce package --no-dependencies",
+    "vsce:publish": "bunx @vscode/vsce publish --no-dependencies",
+    "vsce:login": "bunx @vscode/vsce login",
+    "vsce:verify": "bunx @vscode/vsce verify-pat",
+    "ovsx:publish": "bunx ovsx publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
+    "esbuild": "^0.28.1",
+    "oxlint": "^1.75.0",
+    "typescript": "7.0.2"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  }
+}
