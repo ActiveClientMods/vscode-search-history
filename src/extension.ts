@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 
 import { FolderTreeItem, HistoryTreeProvider, SearchHistoryItem } from './historyProvider';
-import { composeAndRun, runEntry } from './searchRunner';
+import { SearchBarViewProvider } from './searchBarView';
+import { triggerNativeSearch } from './searchRunner';
 import { HistoryStore, type HistoryStoreOptions } from './storage';
-import type { SearchFolder, SearchHistoryEntry } from './types';
+import type { SearchFolder, SearchHistoryEntry, SearchParams } from './types';
 import { currentWorkspace, hasWorkspace } from './workspace';
 
 function readOptions(): HistoryStoreOptions {
@@ -91,15 +92,34 @@ export function activate(context: vscode.ExtensionContext): void {
 	void provider.syncContext();
 	provider.refresh();
 
+	// The native-style search bar: records every search launched through it, runs
+	// it in-view, and can hand off to VS Code's native panel on request.
+	const recordSearch = (params: SearchParams): Promise<SearchHistoryEntry> => {
+		const ws = currentWorkspace();
+		return store.record({ ...params, workspaceId: ws.id, workspaceName: ws.name });
+	};
+	const searchBar = new SearchBarViewProvider(context.extensionUri, store, {
+		record: recordSearch,
+		openInNative: triggerNativeSearch,
+	});
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(SearchBarViewProvider.viewId, searchBar, {
+			webviewOptions: { retainContextWhenHidden: true },
+		}),
+	);
+
 	const register = (command: string, handler: (...args: unknown[]) => unknown) =>
 		context.subscriptions.push(vscode.commands.registerCommand(command, handler));
 
-	register('searchHistory.newSearch', () => composeAndRun(store));
+	// Both the title-bar "+" and the Ctrl+Shift+F keybinding land here: reveal the
+	// search bar and focus its query field, so every search flows through it.
+	register('searchHistory.newSearch', () => searchBar.focus());
 
 	register('searchHistory.runEntry', async (arg) => {
 		const entry = await resolveEntry(provider, arg);
 		if (entry) {
-			await runEntry(store, entry);
+			await store.touch(entry.id);
+			await searchBar.prefillAndRun(entry);
 		}
 	});
 
@@ -144,6 +164,23 @@ export function activate(context: vscode.ExtensionContext): void {
 			entry.id,
 			value.split(',').map((t) => t.trim()),
 		);
+	});
+
+	register('searchHistory.editNote', async (arg) => {
+		const entry = await resolveEntry(provider, arg);
+		if (!entry) {
+			return;
+		}
+		const value = await vscode.window.showInputBox({
+			title: 'Edit note',
+			prompt: 'A free-text note to remember why you ran this search',
+			value: entry.note,
+			ignoreFocusOut: true,
+		});
+		if (value === undefined) {
+			return;
+		}
+		await store.setNote(entry.id, value);
 	});
 
 	register('searchHistory.deleteEntry', async (arg) => {
@@ -302,6 +339,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			if (e.affectsConfiguration('searchHistory')) {
 				store.updateOptions(readOptions());
 				provider.refresh();
+				void searchBar.pushConfig();
 			}
 		}),
 		vscode.workspace.onDidChangeWorkspaceFolders(() => provider.syncContext()),

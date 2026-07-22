@@ -33,7 +33,7 @@ function buildTextPredicate(state: FilterState): {
 	}
 
 	const haystack = (entry: SearchHistoryEntry): string =>
-		[entry.query, entry.workspaceName, entry.filesToInclude, entry.filesToExclude, ...entry.tags]
+		[entry.query, entry.note, entry.workspaceName, entry.filesToInclude, entry.filesToExclude, ...entry.tags]
 			.filter(Boolean)
 			.join('\n');
 

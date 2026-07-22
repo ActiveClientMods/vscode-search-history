@@ -10,6 +10,7 @@ function entry(partial: Partial<SearchHistoryEntry>): SearchHistoryEntry {
 		isRegex: partial.isRegex ?? false,
 		isCaseSensitive: partial.isCaseSensitive ?? false,
 		matchWholeWord: partial.matchWholeWord ?? false,
+		replaceText: partial.replaceText ?? '',
 		filesToInclude: partial.filesToInclude ?? '',
 		filesToExclude: partial.filesToExclude ?? '',
 		workspaceId: partial.workspaceId ?? 'ws-a',
@@ -19,6 +20,7 @@ function entry(partial: Partial<SearchHistoryEntry>): SearchHistoryEntry {
 		useCount: partial.useCount ?? 1,
 		favorite: partial.favorite ?? false,
 		tags: partial.tags ?? [],
+		note: partial.note ?? '',
 	};
 }
 

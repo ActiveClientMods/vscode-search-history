@@ -34,9 +34,22 @@ function sameSearch(a: SearchParams, b: SearchParams): boolean {
 		a.isRegex === b.isRegex &&
 		a.isCaseSensitive === b.isCaseSensitive &&
 		a.matchWholeWord === b.matchWholeWord &&
+		a.replaceText === b.replaceText &&
 		a.filesToInclude === b.filesToInclude &&
 		a.filesToExclude === b.filesToExclude
 	);
+}
+
+/**
+ * Backfill fields added in later versions so entries persisted by an older build
+ * always read back as well-formed. Keeps the rest of the code free of `undefined`
+ * checks for `replaceText` / `note`.
+ */
+function normalizeEntry(entry: SearchHistoryEntry): SearchHistoryEntry {
+	if (typeof entry.replaceText === 'string' && typeof entry.note === 'string') {
+		return entry;
+	}
+	return { ...entry, replaceText: entry.replaceText ?? '', note: entry.note ?? '' };
 }
 
 export interface RecordInput extends SearchParams {
@@ -70,7 +83,7 @@ export class HistoryStore {
 	// --- Entries -------------------------------------------------------------
 
 	getAll(): SearchHistoryEntry[] {
-		return this.memento.get<SearchHistoryEntry[]>(STORAGE_KEY, []);
+		return this.memento.get<SearchHistoryEntry[]>(STORAGE_KEY, []).map(normalizeEntry);
 	}
 
 	getById(id: string): SearchHistoryEntry | undefined {
@@ -106,6 +119,7 @@ export class HistoryStore {
 			isRegex: input.isRegex,
 			isCaseSensitive: input.isCaseSensitive,
 			matchWholeWord: input.matchWholeWord,
+			replaceText: input.replaceText,
 			filesToInclude: input.filesToInclude,
 			filesToExclude: input.filesToExclude,
 			workspaceId: input.workspaceId,
@@ -115,6 +129,7 @@ export class HistoryStore {
 			useCount: 1,
 			favorite: false,
 			tags: [],
+			note: '',
 		};
 		entries.push(entry);
 		await this.saveEntries(this.prune(entries));
@@ -144,6 +159,13 @@ export class HistoryStore {
 		const normalized = normalizeTags(tags);
 		await this.mutate(id, (e) => {
 			e.tags = normalized;
+		});
+	}
+
+	async setNote(id: string, note: string): Promise<void> {
+		const trimmed = note.trim();
+		await this.mutate(id, (e) => {
+			e.note = trimmed;
 		});
 	}
 

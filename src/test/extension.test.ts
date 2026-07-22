@@ -21,6 +21,7 @@ suite('extension integration', () => {
 			'searchHistory.addFavorite',
 			'searchHistory.removeFavorite',
 			'searchHistory.editTags',
+			'searchHistory.editNote',
 			'searchHistory.deleteEntry',
 			'searchHistory.clearHistory',
 			'searchHistory.setFilter',

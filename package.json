@@ -2,7 +2,7 @@
   "name": "vscode-search-history",
   "displayName": "Search History Explorer",
   "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "publisher": "ActiveClientMods",
   "icon": "media/icon.png",
@@ -38,10 +38,19 @@
     "views": {
       "searchHistory": [
         {
+          "id": "searchHistory.searchBar",
+          "name": "Search",
+          "type": "webview",
+          "icon": "media/search-history.svg",
+          "contextualTitle": "Search History",
+          "initialSize": 1
+        },
+        {
           "id": "searchHistory.view",
           "name": "History",
           "icon": "media/search-history.svg",
-          "contextualTitle": "Search History"
+          "contextualTitle": "Search History",
+          "initialSize": 2
         }
       ]
     },
@@ -75,6 +84,12 @@
         "title": "Edit Tags",
         "category": "Search History",
         "icon": "$(tag)"
+      },
+      {
+        "command": "searchHistory.editNote",
+        "title": "Edit Note…",
+        "category": "Search History",
+        "icon": "$(note)"
       },
       {
         "command": "searchHistory.copyQuery",
@@ -221,6 +236,10 @@
           "when": "false"
         },
         {
+          "command": "searchHistory.editNote",
+          "when": "false"
+        },
+        {
           "command": "searchHistory.copyQuery",
           "when": "false"
         },
@@ -340,19 +359,24 @@
           "group": "1_edit@2"
         },
         {
-          "command": "searchHistory.copyQuery",
+          "command": "searchHistory.editNote",
           "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
           "group": "1_edit@3"
         },
         {
+          "command": "searchHistory.copyQuery",
+          "when": "view == searchHistory.view && viewItem =~ /^searchEntry/",
+          "group": "1_edit@4"
+        },
+        {
           "command": "searchHistory.addFavorite",
           "when": "view == searchHistory.view && viewItem == searchEntry",
-          "group": "1_edit@4"
+          "group": "1_edit@5"
         },
         {
           "command": "searchHistory.removeFavorite",
           "when": "view == searchHistory.view && viewItem == searchEntry.favorite",
-          "group": "1_edit@4"
+          "group": "1_edit@5"
         },
         {
           "command": "searchHistory.deleteEntry",
@@ -381,6 +405,13 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "searchHistory.newSearch",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f"
+      }
+    ],
     "configuration": {
       "title": "Search History Explorer",
       "properties": {
@@ -395,6 +426,25 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "When enabled, re-running an identical search (same query, flags and include/exclude patterns in the same workspace) updates the existing entry instead of creating a duplicate."
+        },
+        "searchHistory.maxResults": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 100,
+          "maximum": 100000,
+          "markdownDescription": "Maximum number of match results to show in the in-view results list. When exceeded, the search stops early and the results are marked as truncated (use **Open in VS Code Search** for the full set)."
+        },
+        "searchHistory.searchOnType": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Search as you type, showing a live preview of results after a short delay. The search is only saved to history when you press Enter, use **Search & Save**, or open one of its results — so typing never floods your history with partial queries."
+        },
+        "searchHistory.searchOnTypeDelay": {
+          "type": "number",
+          "default": 300,
+          "minimum": 100,
+          "maximum": 2000,
+          "markdownDescription": "Debounce delay in milliseconds before a search-as-you-type preview runs. Only applies when `#searchHistory.searchOnType#` is enabled."
         }
       }
     }

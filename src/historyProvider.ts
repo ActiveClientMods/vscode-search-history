@@ -281,6 +281,9 @@ function buildTooltip(entry: SearchHistoryEntry): vscode.MarkdownString {
 			entry.matchWholeWord,
 		)}\n`,
 	);
+	if (entry.replaceText) {
+		md.appendMarkdown(`- **Replace:** \`${escapeMd(entry.replaceText)}\`\n`);
+	}
 	if (entry.filesToInclude) {
 		md.appendMarkdown(`- **Include:** \`${escapeMd(entry.filesToInclude)}\`\n`);
 	}
@@ -289,6 +292,9 @@ function buildTooltip(entry: SearchHistoryEntry): vscode.MarkdownString {
 	}
 	if (entry.tags.length > 0) {
 		md.appendMarkdown(`- **Tags:** ${entry.tags.map((t) => `\`${escapeMd(t)}\``).join(', ')}\n`);
+	}
+	if (entry.note) {
+		md.appendMarkdown(`- **Note:** ${escapeMd(entry.note)}\n`);
 	}
 	if (entry.favorite) {
 		md.appendMarkdown(`- $(star-full) Favorite\n`);

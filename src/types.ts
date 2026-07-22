@@ -7,6 +7,8 @@ export interface SearchParams {
 	isRegex: boolean;
 	isCaseSensitive: boolean;
 	matchWholeWord: boolean;
+	/** Replacement text, matching VS Code's "replace" field (empty for a plain search). */
+	replaceText: string;
 	/** Glob(s) to include, matching VS Code's "files to include" field. */
 	filesToInclude: string;
 	/** Glob(s) to exclude, matching VS Code's "files to exclude" field. */
@@ -29,6 +31,8 @@ export interface SearchHistoryEntry extends SearchParams {
 	useCount: number;
 	favorite: boolean;
 	tags: string[];
+	/** Free-text note the user attached to this search (empty when none). */
+	note: string;
 	/** Id of the folder this entry is grouped under, if any. */
 	folderId?: string;
 }

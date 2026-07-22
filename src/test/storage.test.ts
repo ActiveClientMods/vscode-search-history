@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 
-import { HistoryStore, normalizeTags, type RecordInput } from '../storage';
+import { HistoryStore, normalizeTags, STORAGE_KEY, type RecordInput } from '../storage';
 import { FakeMemento } from './fakeMemento';
 
 function input(partial: Partial<RecordInput> = {}): RecordInput {
@@ -9,6 +9,7 @@ function input(partial: Partial<RecordInput> = {}): RecordInput {
 		isRegex: partial.isRegex ?? false,
 		isCaseSensitive: partial.isCaseSensitive ?? false,
 		matchWholeWord: partial.matchWholeWord ?? false,
+		replaceText: partial.replaceText ?? '',
 		filesToInclude: partial.filesToInclude ?? '',
 		filesToExclude: partial.filesToExclude ?? '',
 		workspaceId: partial.workspaceId ?? 'ws-a',
@@ -41,6 +42,57 @@ suite('storage', () => {
 		await store.record(input({ query: 'x', isRegex: false }));
 		await store.record(input({ query: 'x', isRegex: true }));
 		assert.strictEqual(store.getAll().length, 2);
+	});
+
+	test('dedupe treats different replace text as distinct searches', async () => {
+		const store = new HistoryStore(new FakeMemento(), { maxEntries: 100, deduplicate: true });
+		await store.record(input({ query: 'x', replaceText: '' }));
+		await store.record(input({ query: 'x', replaceText: 'y' }));
+		assert.strictEqual(store.getAll().length, 2);
+	});
+
+	test('record defaults replaceText and note to empty strings', async () => {
+		const store = new HistoryStore(new FakeMemento(), { maxEntries: 100, deduplicate: true });
+		const entry = await store.record(input({ query: 'x' }));
+		assert.strictEqual(entry.replaceText, '');
+		assert.strictEqual(entry.note, '');
+	});
+
+	test('setNote persists a trimmed note and survives a reload', async () => {
+		const memento = new FakeMemento();
+		const store = new HistoryStore(memento, { maxEntries: 100, deduplicate: true });
+		const entry = await store.record(input({ query: 'noted' }));
+		await store.setNote(entry.id, '  remember this  ');
+
+		const reloaded = new HistoryStore(memento, { maxEntries: 100, deduplicate: true });
+		assert.strictEqual(reloaded.getById(entry.id)?.note, 'remember this');
+	});
+
+	test('getAll backfills replaceText/note for entries saved by an older build', async () => {
+		const memento = new FakeMemento();
+		// Simulate a legacy record that predates the replaceText/note fields.
+		await memento.update(STORAGE_KEY, [
+			{
+				id: 'legacy-1',
+				query: 'old',
+				isRegex: false,
+				isCaseSensitive: false,
+				matchWholeWord: false,
+				filesToInclude: '',
+				filesToExclude: '',
+				workspaceId: 'ws-a',
+				workspaceName: 'Workspace A',
+				createdAt: 1,
+				lastUsedAt: 1,
+				useCount: 1,
+				favorite: false,
+				tags: [],
+			},
+		]);
+		const store = new HistoryStore(memento, { maxEntries: 100, deduplicate: true });
+		const entry = store.getById('legacy-1');
+		assert.strictEqual(entry?.replaceText, '');
+		assert.strictEqual(entry?.note, '');
 	});
 
 	test('deduplicate disabled always appends', async () => {
