@@ -36,6 +36,8 @@ export interface EngineOutcome {
 	truncated: boolean;
 	engine: 'ripgrep' | 'js';
 	error?: string;
+	/** True when the query is an invalid regular expression (so it shouldn't be saved). */
+	regexInvalid?: boolean;
 }
 
 export interface RunOptions {
@@ -250,10 +252,14 @@ function runRipgrep(
 				handleLine(buffer);
 			}
 			// rg exit codes: 0 = matches, 1 = no matches, 2 = error.
-			const error = !killed && code === 2 && stderr.trim() !== ''
+			const rawError = !killed && code === 2 && stderr.trim() !== ''
 				? stderr.trim().split('\n')[0]
 				: undefined;
-			resolve({ fileCount, matchCount, truncated, engine: 'ripgrep', error });
+			// Surface a clean, colon-free message for the common invalid-regex case
+			// rather than ripgrep's raw "rg: regex parse error:" line.
+			const regexInvalid = rawError !== undefined && /regex parse error/i.test(rawError);
+			const error = regexInvalid ? 'Invalid regular expression' : rawError;
+			resolve({ fileCount, matchCount, truncated, engine: 'ripgrep', error, regexInvalid });
 		});
 	});
 }
@@ -335,9 +341,9 @@ function defaultExcludeGlobs(): string[] {
 }
 
 async function runJsSearch(params: SearchParams, opts: RunOptions): Promise<EngineOutcome> {
-	const { regex, error } = buildLineRegExp(params);
+	const { regex } = buildLineRegExp(params);
 	if (!regex) {
-		return { ...EMPTY, error: `Invalid regex: ${error}` };
+		return { ...EMPTY, error: 'Invalid regular expression', regexInvalid: true };
 	}
 
 	const includes = splitGlobs(params.filesToInclude);

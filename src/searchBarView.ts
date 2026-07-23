@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { type EngineFile, runSearch } from './searchEngine';
+import { type EngineFile, type EngineOutcome, runSearch } from './searchEngine';
 import type { HistoryStore } from './storage';
 import type { SearchHistoryEntry, SearchParams } from './types';
 
@@ -33,7 +33,7 @@ type OutboundMessage =
 	| { type: 'suggestions'; items: Suggestion[] }
 	| { type: 'prefill'; params: SearchParams }
 	| { type: 'focus' }
-	| { type: 'config'; searchOnType: boolean; delay: number }
+	| { type: 'config'; searchOnType: boolean; delay: number; showSuggestions: boolean }
 	| { type: 'searchStarted' }
 	| { type: 'results'; files: WireFile[] }
 	| { type: 'searchDone'; fileCount: number; matchCount: number; truncated: boolean; engine: string; error?: string };
@@ -137,6 +137,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			type: 'config',
 			searchOnType: this.searchOnType,
 			delay: this.searchOnTypeDelay,
+			showSuggestions: config.get<boolean>('showSuggestions', false),
 		});
 	}
 
@@ -161,14 +162,9 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		}, this.searchOnTypeDelay);
 	}
 
-	/** Explicit search (Enter / button): save to history, then run. */
+	/** Explicit search (Enter / button): run, then save if it was a valid query. */
 	private async handleRun(params: SearchParams): Promise<void> {
-		if (params.query.trim() === '') {
-			return;
-		}
-		await this.deps.record(params);
-		this.lastParamsSaved = true;
-		await this.runInView(params);
+		await this.runAndRecord(params);
 	}
 
 	/**
@@ -177,16 +173,34 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	 * it to history automatically (the debounce keeps mid-keystroke fragments out).
 	 */
 	private async handlePreview(params: SearchParams): Promise<void> {
+		await this.runAndRecord(params);
+	}
+
+	/**
+	 * Run the search in-view and persist it — but only when it actually ran to
+	 * completion (not superseded by a newer keystroke) and the query is not an
+	 * invalid regular expression. Invalid-regex queries are shown as an error but
+	 * never pollute the history.
+	 */
+	private async runAndRecord(params: SearchParams): Promise<void> {
 		if (params.query.trim() === '') {
+			return;
+		}
+		this.lastParamsSaved = false;
+		const outcome = await this.runInView(params);
+		if (!outcome || outcome.regexInvalid) {
 			return;
 		}
 		await this.deps.record(params);
 		this.lastParamsSaved = true;
-		await this.runInView(params);
 	}
 
-	/** Run the search and stream results into the webview, cancelling any prior run. */
-	private async runInView(params: SearchParams): Promise<void> {
+	/**
+	 * Run the search and stream results into the webview, cancelling any prior run.
+	 * Returns the outcome, or `undefined` if this run was superseded (cancelled)
+	 * before it finished.
+	 */
+	private async runInView(params: SearchParams): Promise<EngineOutcome | undefined> {
 		this.searchTokens?.cancel();
 		this.searchTokens?.dispose();
 		const tokens = new vscode.CancellationTokenSource();
@@ -208,9 +222,11 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			},
 		});
 
-		if (!tokens.token.isCancellationRequested) {
-			await this.post({ type: 'searchDone', ...outcome });
+		if (tokens.token.isCancellationRequested) {
+			return undefined;
 		}
+		await this.post({ type: 'searchDone', ...outcome });
+		return outcome;
 	}
 
 	private async openMatch(msg: { uri: string; line: number; column: number; endColumn: number }): Promise<void> {
@@ -662,6 +678,7 @@ let activeSuggestion = -1;
 let suggestionItems = [];
 let searchOnType = false;
 let searchOnTypeDelay = 300;
+let showSuggestions = false;
 let typeTimer;
 
 // Restore any state kept across webview reloads.
@@ -785,14 +802,18 @@ for (const input of [els.include, els.exclude]) {
 
 let suggestTimer;
 els.query.addEventListener('input', () => {
-	clearTimeout(suggestTimer);
-	suggestTimer = setTimeout(() => {
-		vscode.postMessage({ type: 'requestSuggestions', query: els.query.value });
-	}, 90);
+	if (showSuggestions) {
+		clearTimeout(suggestTimer);
+		suggestTimer = setTimeout(() => {
+			vscode.postMessage({ type: 'requestSuggestions', query: els.query.value });
+		}, 90);
+	}
 	schedulePreview();
 });
 els.query.addEventListener('focus', () => {
-	vscode.postMessage({ type: 'requestSuggestions', query: els.query.value });
+	if (showSuggestions) {
+		vscode.postMessage({ type: 'requestSuggestions', query: els.query.value });
+	}
 });
 els.query.addEventListener('keydown', (e) => {
 	if (els.suggestions.hidden) return;
@@ -980,6 +1001,8 @@ window.addEventListener('message', (event) => {
 		case 'config':
 			searchOnType = !!msg.searchOnType;
 			searchOnTypeDelay = msg.delay || 300;
+			showSuggestions = !!msg.showSuggestions;
+			if (!showSuggestions) hideSuggestions();
 			applyConfig();
 			break;
 		case 'prefill': applySuggestion({ ...msg.params, favorite: false }); els.query.focus(); break;

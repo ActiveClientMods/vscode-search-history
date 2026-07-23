@@ -2,6 +2,18 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-07-23
+
+### Fixed
+
+- **Invalid regular expressions are no longer saved to history.** A search-as-you-type (or manual) run with an invalid regex is shown as an error but is not recorded, so broken patterns never clutter the list. Persisting now happens only after a search runs to completion successfully.
+- **The invalid-regex message is cleaner** — a plain "Invalid regular expression" instead of ripgrep's raw, colon-terminated `rg: regex parse error:` line.
+- **The favorite state is no longer shown twice.** Toggling a favorite updated both the inline star on the right and the row's leading icon; the row icon now stays a plain search glyph, leaving a single favorite indicator on the right.
+
+### Changed
+
+- **Typing suggestions are now opt-in** via the new `searchHistory.showSuggestions` setting (default **off**). Previously the dropdown of past searches appeared on focus/typing and could overlap the Replace and include/exclude fields.
+
 ## [1.1.1] - 2026-07-23
 
 ### Changed
@@ -61,6 +73,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.1.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.0.0

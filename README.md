@@ -9,7 +9,7 @@ Search History Explorer adds a dedicated **Search History** view to the Activity
 - **Native-style search bar** — a search box that mirrors VS Code's own **Find in Files** widget (query + **Match Case / Whole Word / Regex** toggles that highlight when active, plus **Replace** and clearly-labelled **Include / Exclude** fields), docked at the top of the view. Running a search from here saves it and launches the native panel.
 - **Results in the view** — press Enter and the matches appear **right below the search bar**, grouped by file with the matching line and highlighted hit; click any line to jump straight to it in the editor. No context switch — one window for searching, results and history. Results **refresh live as you edit files** (debounced), just like the native Search view. A one-click **Open in VS Code Search** hands the same search to the native panel when you want it (e.g. to replace across files).
 - **Search as you type** — turn on `searchHistory.searchOnType` and results update as you type; the **Search & Save** button hides and each query you pause on is **saved to history automatically**.
-- **Automatic capture** — rebind `Ctrl+Shift+F` to the bar (on by default) and every search you launch is appended to your history without any extra step. As you type, matching past searches (favorites first) appear as suggestions you can click to restore in full.
+- **Automatic capture** — rebind `Ctrl+Shift+F` to the bar (on by default) and every search you launch is appended to your history without any extra step. Optionally (via `searchHistory.showSuggestions`) matching past searches appear as a dropdown you can click to restore in full.
 - **Rich history** — each entry records the query, timestamp, workspace name, replace text, include/exclude globs, an optional free-text **note**, and the **Regex / Match Case / Whole Word** flags.
 - **Re-run instantly** — click an entry to re-run it and see its matches directly in the view (or send it on to the native panel).
 - **Folders** — group topic-related searches into folders and **drag entries** into them (or use _Move to Folder…_). Folders can be **global** (shared across every workspace) or **workspace-specific**.
@@ -48,6 +48,7 @@ Create a folder with **New Folder** (`⊞` in the title bar) — it's created in
 | `searchHistory.maxResults`        | `5000`  | Maximum matches to show in the in-view results list before the search stops early.                |
 | `searchHistory.searchOnType`      | `false` | Search as you type; each query you pause on is saved automatically and the Search & Save button hides. |
 | `searchHistory.searchOnTypeDelay` | `300`   | Debounce delay (ms) before a search runs (as-you-type and after a file edit).                     |
+| `searchHistory.showSuggestions`   | `false` | Show a dropdown of matching past searches while typing in the search bar.                          |
 
 ## Architecture
 

@@ -2,7 +2,7 @@
   "name": "vscode-search-history",
   "displayName": "Search History Explorer",
   "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "license": "MIT",
   "publisher": "ActiveClientMods",
   "icon": "media/icon.png",
@@ -445,6 +445,11 @@
           "minimum": 100,
           "maximum": 2000,
           "markdownDescription": "Debounce delay in milliseconds before a search runs — both when searching as you type and when re-running the active search after a file edit. The as-you-type debounce only applies when `#searchHistory.searchOnType#` is enabled."
+        },
+        "searchHistory.showSuggestions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show a dropdown of matching past searches while typing in the search bar. Off by default, since the dropdown can overlap the Replace and include/exclude fields."
         }
       }
     }
