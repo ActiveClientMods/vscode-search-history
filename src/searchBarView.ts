@@ -62,6 +62,11 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	private lastParams?: SearchParams;
 	/** Whether {@link lastParams} has already been persisted to history. */
 	private lastParamsSaved = false;
+	/** Cached search-on-type configuration (kept in sync via {@link pushConfig}). */
+	private searchOnType = false;
+	private searchOnTypeDelay = 300;
+	/** Debounce timer for re-running the active search when files change. */
+	private rerunTimer?: ReturnType<typeof setTimeout>;
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
@@ -126,11 +131,34 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	/** Push the current search-on-type configuration to the webview. */
 	async pushConfig(): Promise<void> {
 		const config = vscode.workspace.getConfiguration('searchHistory');
+		this.searchOnType = config.get<boolean>('searchOnType', false);
+		this.searchOnTypeDelay = config.get<number>('searchOnTypeDelay', 300);
 		await this.post({
 			type: 'config',
-			searchOnType: config.get<boolean>('searchOnType', false),
-			delay: config.get<number>('searchOnTypeDelay', 300),
+			searchOnType: this.searchOnType,
+			delay: this.searchOnTypeDelay,
 		});
+	}
+
+	/**
+	 * Re-run the active search when a file is edited, mirroring VS Code's own
+	 * Search view (which live-refreshes its results as files change). Debounced by
+	 * {@link searchOnTypeDelay} and a no-op unless a search is currently shown.
+	 */
+	onDocumentChanged(event: vscode.TextDocumentChangeEvent): void {
+		if (!this.lastParams || event.contentChanges.length === 0) {
+			return;
+		}
+		// Only bother while the view is actually on screen.
+		if (this.view && this.view.visible === false) {
+			return;
+		}
+		clearTimeout(this.rerunTimer);
+		this.rerunTimer = setTimeout(() => {
+			if (this.lastParams) {
+				void this.runInView(this.lastParams);
+			}
+		}, this.searchOnTypeDelay);
 	}
 
 	/** Explicit search (Enter / button): save to history, then run. */
@@ -143,12 +171,17 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		await this.runInView(params);
 	}
 
-	/** Search-as-you-type preview: run without saving (saved on Enter or on open). */
+	/**
+	 * Search-as-you-type run. Unlike a manual run there is no button to press, so
+	 * once the debounce has settled on a query we treat it as intentional and save
+	 * it to history automatically (the debounce keeps mid-keystroke fragments out).
+	 */
 	private async handlePreview(params: SearchParams): Promise<void> {
 		if (params.query.trim() === '') {
 			return;
 		}
-		this.lastParamsSaved = false;
+		await this.deps.record(params);
+		this.lastParamsSaved = true;
 		await this.runInView(params);
 	}
 
@@ -279,9 +312,12 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			</div>
 		</div>
 
-		<div class="actions indented">
+		<div id="actions" class="actions indented">
 			<button id="run" class="run" type="button">Search &amp; Save</button>
 			<span class="hint">Press Enter to run</span>
+		</div>
+		<div id="typeHint" class="actions indented" hidden>
+			<span class="hint">Searching as you type — saved automatically</span>
 		</div>
 	</div>
 
@@ -611,6 +647,8 @@ const els = {
 	optWord: $('opt-word'),
 	optRegex: $('opt-regex'),
 	run: $('run'),
+	actions: $('actions'),
+	typeHint: $('typeHint'),
 	status: $('status'),
 	statusText: $('statusText'),
 	openNative: $('openNative'),
@@ -671,6 +709,13 @@ function renderReplace() {
 function renderDetails() {
 	els.detailsRow.classList.toggle('open', detailsVisible);
 	els.toggleDetails.setAttribute('aria-pressed', String(detailsVisible));
+}
+
+// In search-as-you-type mode there is nothing to press: the Search & Save button
+// and its "Press Enter" hint are hidden, and a passive hint takes their place.
+function applyConfig() {
+	els.actions.hidden = searchOnType;
+	els.typeHint.hidden = !searchOnType;
 }
 
 function bindToggle(el, key) {
@@ -932,7 +977,11 @@ window.addEventListener('message', (event) => {
 	switch (msg.type) {
 		case 'suggestions': renderSuggestions(msg.items); break;
 		case 'focus': els.query.focus(); els.query.select(); break;
-		case 'config': searchOnType = !!msg.searchOnType; searchOnTypeDelay = msg.delay || 300; break;
+		case 'config':
+			searchOnType = !!msg.searchOnType;
+			searchOnTypeDelay = msg.delay || 300;
+			applyConfig();
+			break;
 		case 'prefill': applySuggestion({ ...msg.params, favorite: false }); els.query.focus(); break;
 		case 'searchStarted':
 			clearResults();
@@ -960,6 +1009,7 @@ function summarize(msg) {
 renderFlags();
 renderReplace();
 renderDetails();
+applyConfig();
 els.query.focus();
 vscode.postMessage({ type: 'ready' });
 `;

@@ -342,6 +342,10 @@ export function activate(context: vscode.ExtensionContext): void {
 				void searchBar.pushConfig();
 			}
 		}),
+		// Live-refresh the in-view results as files are edited, like the native
+		// Search view. The provider debounces and ignores this unless a search is
+		// currently shown.
+		vscode.workspace.onDidChangeTextDocument((e) => searchBar.onDocumentChanged(e)),
 		vscode.workspace.onDidChangeWorkspaceFolders(() => provider.syncContext()),
 	);
 }

@@ -2,6 +2,17 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-23
+
+### Changed
+
+- **Search as you type now saves automatically.** When `searchHistory.searchOnType` is enabled, each query you pause on (after the debounce) is recorded to history without any extra step — previously the live search ran but was only saved on Enter, the button, or on opening a result.
+- **The Search & Save button and its "Press Enter to run" hint are hidden** while `searchHistory.searchOnType` is on, since there is nothing left to press; a passive "Searching as you type — saved automatically" hint takes their place.
+
+### Added
+
+- **Live-refreshing results** — the in-view results now re-run automatically (debounced by `searchHistory.searchOnTypeDelay`) when you edit a file, mirroring VS Code's own Search view, so the match list stays current as you work. This refresh does not create new history entries.
+
 ## [1.1.0] - 2026-07-22
 
 ### Added
@@ -50,5 +61,6 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.1.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.0.0

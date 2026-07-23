@@ -2,7 +2,7 @@
   "name": "vscode-search-history",
   "displayName": "Search History Explorer",
   "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "MIT",
   "publisher": "ActiveClientMods",
   "icon": "media/icon.png",
@@ -437,14 +437,14 @@
         "searchHistory.searchOnType": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Search as you type, showing a live preview of results after a short delay. The search is only saved to history when you press Enter, use **Search & Save**, or open one of its results — so typing never floods your history with partial queries."
+          "markdownDescription": "Search as you type, showing live results after a short delay. Each query you pause on is **saved to history automatically** (the debounce keeps mid-keystroke fragments out), so the **Search & Save** button and its \"Press Enter\" hint are hidden. Results also refresh automatically when you edit a file — just like VS Code's own Search view."
         },
         "searchHistory.searchOnTypeDelay": {
           "type": "number",
           "default": 300,
           "minimum": 100,
           "maximum": 2000,
-          "markdownDescription": "Debounce delay in milliseconds before a search-as-you-type preview runs. Only applies when `#searchHistory.searchOnType#` is enabled."
+          "markdownDescription": "Debounce delay in milliseconds before a search runs — both when searching as you type and when re-running the active search after a file edit. The as-you-type debounce only applies when `#searchHistory.searchOnType#` is enabled."
         }
       }
     }
