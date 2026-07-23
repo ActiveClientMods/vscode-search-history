@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 
-import { HistoryStore, normalizeTags, STORAGE_KEY, type RecordInput } from '../storage';
+import { HistoryStore, normalizeTags, STORAGE_KEY, type RecordInput } from '../core/storage';
 import { FakeMemento } from './fakeMemento';
 
 function input(partial: Partial<RecordInput> = {}): RecordInput {

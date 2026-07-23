@@ -75,17 +75,17 @@ By default the extension **rebinds `Ctrl+Shift+F`** to focus its search bar, so 
 
 ## Project layout
 
-| File                     | Responsibility                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| `src/types.ts`           | Shared domain types.                                                           |
-| `src/storage.ts`         | `Memento`-backed CRUD store, dedupe & pruning.                                 |
-| `src/filter.ts`          | Pure filtering & sorting (no `vscode` import — trivially testable).            |
-| `src/workspace.ts`       | Stable workspace identity.                                                     |
-| `src/searchEngine.ts`    | Text-search engine: bundled ripgrep with a pure-API JS fallback.               |
-| `src/searchRunner.ts`    | Native Find-in-Files hand-off.                                                 |
-| `src/searchBarView.ts`   | Native-style search-bar `WebviewViewProvider` (capture, results, suggestions). |
-| `src/historyProvider.ts` | `TreeDataProvider`, view chrome and context keys.                              |
-| `src/extension.ts`       | Activation and command wiring.                                                 |
+The source is grouped by concern: a `vscode`-light domain layer (`core`), the
+search engines (`search`), the UI (`views`), and command wiring (`commands`).
+
+| Path                                     | Responsibility                                                                                                                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/extension.ts`                       | Activation: constructs the store, tree view and search-bar, then wires commands and events.                                                                          |
+| `src/core/`                              | Storage-agnostic domain layer. `types` (shared types), `storage` (`Memento` CRUD, dedupe & pruning), `filter` (pure filter/sort, no `vscode`), `workspace` (stable identity). |
+| `src/search/`                            | Text search. `engineCore` (shared types/helpers), `ripgrepEngine`, `jsEngine`, `searchEngine` (backend dispatcher + public API), `searchRunner` (native Find-in-Files hand-off). |
+| `src/views/`                             | The UI. `searchBarView` (search-bar webview host), `historyProvider` (`TreeDataProvider` + drag/drop + view chrome), `treeItems` (TreeItem classes), `treeFormatting` (label/tooltip rendering). |
+| `src/commands/`                          | Command handlers grouped by concern — `entryCommands`, `folderCommands`, `filterCommands` — plus shared `helpers` and the `registerCommands` entry point.            |
+| `media/searchBar.css`, `media/searchBar.js` | The search-bar webview's stylesheet and client script, loaded from disk via `asWebviewUri` (kept out of the `.ts` so they get proper tooling).                    |
 
 ## Development
 

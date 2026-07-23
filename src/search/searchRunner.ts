@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import type { SearchParams } from './types';
+import type { SearchParams } from '../core/types';
 
 /**
  * Trigger VS Code's native "Find in Files" search pre-filled with the exact

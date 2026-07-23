@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 
-import { buildLineRegExp, buildRipgrepArgs, escapeRegExp, matchLine, splitGlobs } from '../searchEngine';
-import type { SearchParams } from '../types';
+import { buildLineRegExp, buildRipgrepArgs, escapeRegExp, matchLine, splitGlobs } from '../search/searchEngine';
+import type { SearchParams } from '../core/types';
 
 function params(partial: Partial<SearchParams> = {}): SearchParams {
 	return {

@@ -1,0 +1,133 @@
+// Pure-`vscode`-API search engine used when the bundled ripgrep binary cannot be
+// located. Slower than ripgrep, but fully cross-platform and dependency-free:
+// it lists candidate files (`findFiles`), reads each one and scans it with a
+// compiled RegExp, honouring include/exclude globs and `files.exclude` /
+// `search.exclude`.
+
+import * as vscode from 'vscode';
+
+import type { SearchParams } from '../core/types';
+import {
+	EMPTY,
+	type EngineMatch,
+	type EngineOutcome,
+	MAX_FILES,
+	type RunOptions,
+	relativePath,
+	splitGlobs,
+	truncatePreview,
+} from './engineCore';
+
+const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
+
+export function escapeRegExp(text: string): string {
+	return text.replace(REGEX_SPECIAL, '\\$&');
+}
+
+/** Compile the query + flags into a global RegExp, or report why it failed. */
+export function buildLineRegExp(params: SearchParams): { regex?: RegExp; error?: string } {
+	let source = params.isRegex ? params.query : escapeRegExp(params.query);
+	if (params.matchWholeWord) {
+		source = `\\b(?:${source})\\b`;
+	}
+	const flags = params.isCaseSensitive ? 'g' : 'gi';
+	try {
+		return { regex: new RegExp(source, flags) };
+	} catch (err) {
+		return { error: err instanceof Error ? err.message : String(err) };
+	}
+}
+
+/** All non-empty matches of `regex` within a single line (0-based columns). */
+export function matchLine(regex: RegExp, line: string): { column: number; endColumn: number }[] {
+	const out: { column: number; endColumn: number }[] = [];
+	regex.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = regex.exec(line)) !== null) {
+		if (m[0] === '') {
+			regex.lastIndex += 1;
+			continue;
+		}
+		out.push({ column: m.index, endColumn: m.index + m[0].length });
+	}
+	return out;
+}
+
+function isBinary(bytes: Uint8Array): boolean {
+	const cap = Math.min(bytes.length, 8000);
+	for (let i = 0; i < cap; i++) {
+		if (bytes[i] === 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/** Default file/search excludes so the JS scan skips node_modules, .git, etc. */
+function defaultExcludeGlobs(): string[] {
+	const cfg = vscode.workspace.getConfiguration();
+	const out = new Set<string>();
+	for (const key of ['files.exclude', 'search.exclude']) {
+		const obj = cfg.get<Record<string, boolean>>(key) ?? {};
+		for (const [glob, on] of Object.entries(obj)) {
+			if (on) {
+				out.add(glob);
+			}
+		}
+	}
+	return [...out];
+}
+
+export async function runJsSearch(params: SearchParams, opts: RunOptions): Promise<EngineOutcome> {
+	const { regex } = buildLineRegExp(params);
+	if (!regex) {
+		return { ...EMPTY, error: 'Invalid regular expression', regexInvalid: true };
+	}
+
+	const includes = splitGlobs(params.filesToInclude);
+	const includeGlob = includes.length === 0 ? '**/*' : `{${includes.join(',')}}`;
+	const excludes = [...splitGlobs(params.filesToExclude), ...defaultExcludeGlobs()];
+	const excludeGlob = excludes.length === 0 ? undefined : `{${excludes.join(',')}}`;
+
+	const uris = await vscode.workspace.findFiles(includeGlob, excludeGlob, MAX_FILES, opts.token);
+	const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+
+	let matchCount = 0;
+	let fileCount = 0;
+	let truncated = false;
+
+	for (const uri of uris) {
+		if (opts.token.isCancellationRequested) {
+			break;
+		}
+		let bytes: Uint8Array;
+		try {
+			bytes = await vscode.workspace.fs.readFile(uri);
+		} catch {
+			continue;
+		}
+		if (isBinary(bytes)) {
+			continue;
+		}
+		const lines = Buffer.from(bytes).toString('utf8').split(/\r\n|\r|\n/);
+		const matches: EngineMatch[] = [];
+		for (let i = 0; i < lines.length && !truncated; i++) {
+			for (const found of matchLine(regex, lines[i])) {
+				matches.push({ line: i + 1, column: found.column, endColumn: found.endColumn, preview: truncatePreview(lines[i]) });
+				matchCount += 1;
+				if (matchCount >= opts.maxMatches) {
+					truncated = true;
+					break;
+				}
+			}
+		}
+		if (matches.length > 0) {
+			fileCount += 1;
+			opts.onFile({ uri, relativePath: relativePath(uri, multiRoot), matches });
+		}
+		if (truncated) {
+			break;
+		}
+	}
+	return { fileCount, matchCount, truncated, engine: 'js' };
+}

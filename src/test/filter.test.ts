@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 
-import { filterEntries, sortEntries } from '../filter';
-import type { FilterState, SearchHistoryEntry } from '../types';
+import { filterEntries, sortEntries } from '../core/filter';
+import type { FilterState, SearchHistoryEntry } from '../core/types';
 
 function entry(partial: Partial<SearchHistoryEntry>): SearchHistoryEntry {
 	return {
