@@ -18,7 +18,7 @@ function readOptions(): HistoryStoreOptions {
 
 export function activate(context: vscode.ExtensionContext): void {
 	const store = new HistoryStore(context.globalState, readOptions());
-	const provider = new HistoryTreeProvider(store, context.workspaceState);
+	const provider = new HistoryTreeProvider(store, context.workspaceState, context.extensionUri);
 
 	const view = vscode.window.createTreeView('searchHistory.view', {
 		treeDataProvider: provider,

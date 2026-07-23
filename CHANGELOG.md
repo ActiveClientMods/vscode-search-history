@@ -2,6 +2,12 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-07-23
+
+### Changed
+
+- **The favorite indicator is now a single filled gold star, and only for favorites.** Favorited rows show a filled gold ⭐ on the left; non-favorite rows show no leading icon (the dimmed outline star was removed). The star is a bundled SVG rather than a themed codicon, so it keeps its gold color when the row is selected instead of turning white. Toggling still happens via the inline star (on hover) or the right-click menu.
+
 ## [1.1.3] - 2026-07-23
 
 ### Changed
@@ -84,6 +90,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.1.4]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.1

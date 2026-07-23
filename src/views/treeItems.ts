@@ -7,18 +7,21 @@ import { buildTooltip, describeEntry } from './treeFormatting';
 
 /** Tree item wrapping a single history entry. */
 export class SearchHistoryItem extends vscode.TreeItem {
-	constructor(public readonly entry: SearchHistoryEntry) {
+	constructor(
+		public readonly entry: SearchHistoryEntry,
+		favoriteIcon: vscode.Uri,
+	) {
 		super(entry.query, vscode.TreeItemCollapsibleState.None);
 
 		this.id = entry.id;
 		this.contextValue = entry.favorite ? 'searchEntry.favorite' : 'searchEntry';
-		// The leading star is always visible (unlike the hover-only inline action),
-		// so it doubles as an at-a-glance favorite indicator: filled + yellow when
-		// favorited, a dimmed outline otherwise. The inline button and the
-		// right-click menu still perform the actual toggle.
-		this.iconPath = entry.favorite
-			? new vscode.ThemeIcon('star-full', new vscode.ThemeColor('charts.yellow'))
-			: new vscode.ThemeIcon('star-empty');
+		// Favorites get a leading filled gold star as an at-a-glance indicator;
+		// non-favorites show no leading icon at all. We use a bundled SVG rather than
+		// a themed `star-full` codicon on purpose: the tree recolors themed icons to
+		// the selection foreground when a row is selected (turning the gold star
+		// white), whereas a custom image keeps its own color. The hover inline button
+		// and the right-click menu still perform the actual toggle.
+		this.iconPath = entry.favorite ? favoriteIcon : undefined;
 		this.description = describeEntry(entry);
 		this.tooltip = buildTooltip(entry);
 		this.command = {

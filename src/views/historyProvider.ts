@@ -26,12 +26,15 @@ export class HistoryTreeProvider
 
 	private state: FilterState;
 	private lastRegexError: string | undefined;
+	private readonly favoriteIcon: vscode.Uri;
 	view?: vscode.TreeView<TreeElement>;
 
 	constructor(
 		private readonly store: HistoryStore,
 		private readonly workspaceMemento: vscode.Memento,
+		extensionUri: vscode.Uri,
 	) {
+		this.favoriteIcon = vscode.Uri.joinPath(extensionUri, 'media', 'star-full.svg');
 		const saved = workspaceMemento.get<FilterState>(FILTER_STATE_KEY);
 		this.state = { ...DEFAULT_FILTER_STATE, ...saved };
 		if (this.state.scope === 'workspace' && !hasWorkspace()) {
@@ -50,7 +53,9 @@ export class HistoryTreeProvider
 
 	getChildren(element?: TreeElement): TreeElement[] {
 		if (element instanceof FolderTreeItem) {
-			return this.entriesInFolder(element.folder.id).map((e) => new SearchHistoryItem(e));
+			return this.entriesInFolder(element.folder.id).map(
+				(e) => new SearchHistoryItem(e, this.favoriteIcon),
+			);
 		}
 		if (element instanceof SearchHistoryItem) {
 			return [];
@@ -112,7 +117,7 @@ export class HistoryTreeProvider
 			.map((f) => new FolderTreeItem(f, counts.get(f.id) ?? 0));
 
 		this.updateViewChrome(entries.length, folderItems.length);
-		return [...folderItems, ...ungrouped.map((e) => new SearchHistoryItem(e))];
+		return [...folderItems, ...ungrouped.map((e) => new SearchHistoryItem(e, this.favoriteIcon))];
 	}
 
 	private entriesInFolder(folderId: string): SearchHistoryEntry[] {
