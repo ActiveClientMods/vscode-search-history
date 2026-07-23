@@ -2,6 +2,17 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-07-23
+
+### Changed
+
+- **The favorite star is now always visible on every row** and reflects its state — filled and yellow for favorites, a dimmed outline otherwise — so it works as an at-a-glance favorite indicator, not just a hover action. Toggling still happens via the inline star (on hover) or the right-click menu. (VS Code renders a row's inline action buttons only on hover, so the always-visible indicator is the row's leading icon.)
+- **The Replace expand/collapse chevron now rotates in place.** Only the chevron glyph rotates when the Replace field opens/closes; the button's hover area no longer rotates with it, so the hover target stays fixed.
+
+### Internal
+
+- **Reorganized the source into concern-based folders** — `core/` (types, storage, filter, workspace), `search/` (engine core, ripgrep/JS backends, dispatcher, native hand-off), `views/` (search-bar webview, tree provider, tree items, formatting) and `commands/` (handlers grouped by concern). The search-bar webview's CSS and client script were extracted from `searchBarView.ts` into `media/searchBar.css` and `media/searchBar.js` (loaded via `asWebviewUri`), roughly halving that file. No functional changes.
+
 ## [1.1.2] - 2026-07-23
 
 ### Fixed
@@ -73,6 +84,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.1.3]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.0

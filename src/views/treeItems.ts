@@ -12,9 +12,13 @@ export class SearchHistoryItem extends vscode.TreeItem {
 
 		this.id = entry.id;
 		this.contextValue = entry.favorite ? 'searchEntry.favorite' : 'searchEntry';
-		// The favorite state is shown only by the inline star on the right; the row
-		// icon stays a plain search glyph so the indicator isn't duplicated.
-		this.iconPath = new vscode.ThemeIcon('search');
+		// The leading star is always visible (unlike the hover-only inline action),
+		// so it doubles as an at-a-glance favorite indicator: filled + yellow when
+		// favorited, a dimmed outline otherwise. The inline button and the
+		// right-click menu still perform the actual toggle.
+		this.iconPath = entry.favorite
+			? new vscode.ThemeIcon('star-full', new vscode.ThemeColor('charts.yellow'))
+			: new vscode.ThemeIcon('star-empty');
 		this.description = describeEntry(entry);
 		this.tooltip = buildTooltip(entry);
 		this.command = {

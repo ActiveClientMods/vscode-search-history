@@ -292,7 +292,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 <body>
 	<div class="bar">
 		<div class="query-row">
-			<button id="toggleReplace" class="icon-btn chevron" type="button" title="Toggle Replace" aria-label="Toggle Replace" aria-pressed="false">&#8250;</button>
+			<button id="toggleReplace" class="icon-btn chevron-btn" type="button" title="Toggle Replace" aria-label="Toggle Replace" aria-pressed="false"><span class="chevron-icon">&#8250;</span></button>
 			<div class="field query-field">
 				<input id="query" type="text" spellcheck="false" placeholder="Search" aria-label="Search query" />
 				<div class="options">

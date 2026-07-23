@@ -85,8 +85,17 @@ body {
 	opacity: 0.75;
 }
 .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
-.chevron { font-size: 15px; transition: transform 0.12s ease; }
-.chevron.expanded { transform: rotate(90deg); }
+/* Only the glyph rotates — the button (and thus its hover area) stays put, so the
+   hover target never shifts as the Replace section expands/collapses. */
+.chevron-btn { font-size: 15px; }
+.chevron-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+	transition: transform 0.12s ease;
+}
+.chevron-btn.expanded .chevron-icon { transform: rotate(90deg); }
 .details-btn { font-size: 16px; line-height: 1; }
 .details-btn[aria-pressed="true"] {
 	opacity: 1;
@@ -105,6 +114,7 @@ body {
 .collapsible > .collapsible-inner { overflow: hidden; min-height: 0; }
 @media (prefers-reduced-motion: reduce) {
 	.collapsible { transition: none; }
+	.chevron-icon { transition: none; }
 }
 
 /* Align content under the query field, past the leading chevron (20px + gap). */

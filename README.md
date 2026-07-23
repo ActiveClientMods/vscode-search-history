@@ -14,7 +14,7 @@ Search History Explorer adds a dedicated **Search History** view to the Activity
 - **Re-run instantly** — click an entry to re-run it and see its matches directly in the view (or send it on to the native panel).
 - **Folders** — group topic-related searches into folders and **drag entries** into them (or use _Move to Folder…_). Folders can be **global** (shared across every workspace) or **workspace-specific**.
 - **Filter & Sort menu** — the title-bar filter is a dropdown (like the Explorer's `…` menu): set a text/regex filter, filter by tag, toggle favorites-only, and clear — all clearly labelled, no guessing.
-- **Tags & favorites** — tag searches freely and toggle the ⭐ directly on a row (outline ↔ filled). Favorites sort to the top and are protected from automatic pruning.
+- **Tags & favorites** — every row shows a star that is always visible and reflects its state (filled ⭐ for favorites, outline ☆ otherwise), so it doubles as an at-a-glance indicator; click the inline star (on hover) or use the right-click menu to toggle. Favorites sort to the top and are protected from automatic pruning.
 - **Global ↔ Workspace scope** — toggle between _all_ searches and only those made in the current workspace, straight from the view's title bar.
 - **Automatic de-duplication** — re-running an identical search bumps its usage count instead of cluttering the list (configurable).
 
