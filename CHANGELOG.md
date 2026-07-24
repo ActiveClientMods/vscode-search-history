@@ -2,6 +2,20 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-24
+
+### Added
+
+- **Clear Search** and **Clear Match Options** actions in the search bar's title bar. **Clear Search** (clear-all icon) empties the query, replace, and files-to-include / files-to-exclude fields in one click and clears the in-view results; **Clear Match Options** (reset icon) unchecks Match Case, Whole Word and Regex without running a search.
+- **Refresh action on the search bar** that re-runs the currently active search (refreshing the in-view results, without recording a new history entry) _and_ reloads the history tree — a one-click way to bring everything up to date. The History view's own overflow **Refresh** continues to reload just the history list.
+- **Two settings governing what a match-option toggle does:**
+  - `searchHistory.rerunOnOptionToggle` (default **on**) — re-run the current search when you toggle Match Case, Whole Word or Regex.
+  - `searchHistory.saveOnOptionToggle` (default **on**) — when a toggle re-runs the search, also save that run to history. Only applies when re-running is on; with it off, the toggled search runs but is saved only when you press Enter, use **Search & Save**, or open one of its results.
+
+### Changed
+
+- **Toggling Match Case / Whole Word / Regex is now configurable** via the two settings above, instead of always firing a fresh search that got saved as a new history entry. By default a toggle re-runs and saves (as before); turn off `saveOnOptionToggle` to re-run without cluttering history, or `rerunOnOptionToggle` to only update the flag.
+
 ## [1.1.4] - 2026-07-23
 
 ### Changed
@@ -90,6 +104,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.2

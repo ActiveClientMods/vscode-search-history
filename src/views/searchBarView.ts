@@ -24,6 +24,7 @@ type InboundMessage =
 	| { type: 'ready' }
 	| { type: 'run'; params: SearchParams }
 	| { type: 'preview'; params: SearchParams }
+	| { type: 'runNoSave'; params: SearchParams }
 	| { type: 'requestSuggestions'; query: string }
 	| { type: 'openMatch'; uri: string; line: number; column: number; endColumn: number }
 	| { type: 'openInNative' };
@@ -33,10 +34,19 @@ type OutboundMessage =
 	| { type: 'suggestions'; items: Suggestion[] }
 	| { type: 'prefill'; params: SearchParams }
 	| { type: 'focus' }
-	| { type: 'config'; searchOnType: boolean; delay: number; showSuggestions: boolean }
+	| {
+			type: 'config';
+			searchOnType: boolean;
+			delay: number;
+			showSuggestions: boolean;
+			rerunOnOptionToggle: boolean;
+			saveOnOptionToggle: boolean;
+	  }
 	| { type: 'searchStarted' }
 	| { type: 'results'; files: WireFile[] }
-	| { type: 'searchDone'; fileCount: number; matchCount: number; truncated: boolean; engine: string; error?: string };
+	| { type: 'searchDone'; fileCount: number; matchCount: number; truncated: boolean; engine: string; error?: string }
+	| { type: 'clearInputs' }
+	| { type: 'clearOptions' };
 
 const MAX_SUGGESTIONS = 8;
 const DEFAULT_MAX_RESULTS = 5000;
@@ -93,6 +103,9 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 				case 'preview':
 					void this.handlePreview(message.params);
 					return;
+				case 'runNoSave':
+					void this.runNoSave(message.params);
+					return;
 				case 'requestSuggestions':
 					this.postSuggestions(message.query);
 					return;
@@ -128,6 +141,39 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		await this.runInView(params);
 	}
 
+	/**
+	 * Clear every search input (query, replace, include, exclude) and the in-view
+	 * results. Also drops the active search so a subsequent Refresh has nothing
+	 * stale to re-run. Backs the "Clear Search" title-bar action.
+	 */
+	clearInputs(): void {
+		this.searchTokens?.cancel();
+		this.searchTokens?.dispose();
+		this.searchTokens = undefined;
+		this.lastParams = undefined;
+		this.lastParamsSaved = false;
+		void this.post({ type: 'clearInputs' });
+	}
+
+	/**
+	 * Reset the three match options (Match Case, Whole Word, Regex) without firing
+	 * a search or touching history. Backs the "Clear Match Options" title-bar action.
+	 */
+	clearOptions(): void {
+		void this.post({ type: 'clearOptions' });
+	}
+
+	/**
+	 * Re-run the currently active search in-view (no history write). Backs the
+	 * search-bar "Refresh" action, which refreshes the visible results in addition
+	 * to the history tree. A no-op when nothing has been searched yet.
+	 */
+	async rerunActiveSearch(): Promise<void> {
+		if (this.lastParams) {
+			await this.runInView(this.lastParams);
+		}
+	}
+
 	/** Push the current search-on-type configuration to the webview. */
 	async pushConfig(): Promise<void> {
 		const config = vscode.workspace.getConfiguration('searchHistory');
@@ -138,6 +184,8 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			searchOnType: this.searchOnType,
 			delay: this.searchOnTypeDelay,
 			showSuggestions: config.get<boolean>('showSuggestions', false),
+			rerunOnOptionToggle: config.get<boolean>('rerunOnOptionToggle', true),
+			saveOnOptionToggle: config.get<boolean>('saveOnOptionToggle', true),
 		});
 	}
 
@@ -174,6 +222,20 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	 */
 	private async handlePreview(params: SearchParams): Promise<void> {
 		await this.runAndRecord(params);
+	}
+
+	/**
+	 * Run the search in-view without recording it. Used when a match-option toggle
+	 * re-runs the search but the user has disabled saving toggled runs
+	 * (`saveOnOptionToggle`). Marking it unsaved means opening one of its results —
+	 * or pressing Enter / the button — still captures it to history.
+	 */
+	private async runNoSave(params: SearchParams): Promise<void> {
+		if (params.query.trim() === '') {
+			return;
+		}
+		this.lastParamsSaved = false;
+		await this.runInView(params);
 	}
 
 	/**

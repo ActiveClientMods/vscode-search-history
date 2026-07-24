@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { currentWorkspace, hasWorkspace } from '../core/workspace';
 import type { CommandDeps, RegisterFn } from './deps';
 
-export function registerFilterCommands(register: RegisterFn, { store, provider }: CommandDeps): void {
+export function registerFilterCommands(register: RegisterFn, { store, provider, searchBar }: CommandDeps): void {
 	register('searchHistory.clearHistory', async () => {
 		const state = provider.getFilterState();
 		const scopedToWorkspace = state.scope === 'workspace' && hasWorkspace();
@@ -61,5 +61,13 @@ export function registerFilterCommands(register: RegisterFn, { store, provider }
 	register('searchHistory.showAllEntries', () => provider.setState({ favoritesOnly: false }));
 	register('searchHistory.useGlobalScope', () => provider.setScope('global'));
 	register('searchHistory.useWorkspaceScope', () => provider.setScope('workspace'));
+	// The History view's overflow Refresh reloads only the history tree.
 	register('searchHistory.refresh', () => provider.refresh());
+
+	// The search bar's Refresh does both: re-run the active search (refreshing the
+	// in-view results, without recording a new entry) and reload the history tree.
+	register('searchHistory.refreshSearch', () => {
+		void searchBar.rerunActiveSearch();
+		provider.refresh();
+	});
 }

@@ -11,6 +11,10 @@ export function registerEntryCommands(register: RegisterFn, { store, provider, s
 	// search bar and focus its query field, so every search flows through it.
 	register('searchHistory.newSearch', () => searchBar.focus());
 
+	// Search-bar title-bar actions: wipe the input fields, or reset the match options.
+	register('searchHistory.clearSearchInputs', () => searchBar.clearInputs());
+	register('searchHistory.clearSearchOptions', () => searchBar.clearOptions());
+
 	register('searchHistory.runEntry', async (arg) => {
 		const entry = await resolveEntry(provider, arg);
 		if (entry) {

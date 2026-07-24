@@ -34,6 +34,9 @@ suite('extension integration', () => {
 			'searchHistory.renameFolder',
 			'searchHistory.deleteFolder',
 			'searchHistory.moveToFolder',
+			'searchHistory.clearSearchInputs',
+			'searchHistory.clearSearchOptions',
+			'searchHistory.refreshSearch',
 		];
 		for (const command of expected) {
 			assert.ok(commands.includes(command), `missing command: ${command}`);
@@ -52,5 +55,8 @@ suite('extension integration', () => {
 		await vscode.commands.executeCommand('searchHistory.useGlobalScope');
 		await vscode.commands.executeCommand('searchHistory.clearFilter');
 		await vscode.commands.executeCommand('searchHistory.refresh');
+		await vscode.commands.executeCommand('searchHistory.refreshSearch');
+		await vscode.commands.executeCommand('searchHistory.clearSearchInputs');
+		await vscode.commands.executeCommand('searchHistory.clearSearchOptions');
 	});
 });

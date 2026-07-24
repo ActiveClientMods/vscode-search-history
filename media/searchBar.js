@@ -37,6 +37,11 @@ let searchOnType = false;
 let searchOnTypeDelay = 300;
 let showSuggestions = false;
 let typeTimer;
+// How flipping a match option (Match Case / Whole Word / Regex) behaves, both
+// user-configurable: whether it re-runs the search, and whether that re-run is
+// also saved to history (the latter only applies when re-running is on).
+let rerunOnOptionToggle = true;
+let saveOnOptionToggle = true;
 
 // Restore any state kept across webview reloads.
 const saved = vscode.getState();
@@ -97,9 +102,20 @@ function bindToggle(el, key) {
 		flags[key] = !flags[key];
 		renderFlags();
 		persist();
-		schedulePreview();
+		runFromFlagChange();
 		els.query.focus();
 	});
+}
+
+// What flipping Match Case / Whole Word / Regex does is user-configurable:
+//   • rerunOnOptionToggle off → just update the flag (run manually with Enter/button)
+//   • on + saveOnOptionToggle on  → re-run and save the search with the new options
+//   • on + saveOnOptionToggle off → re-run only; the user saves it manually
+function runFromFlagChange() {
+	if (!rerunOnOptionToggle) return;
+	if (els.query.value.trim() === '') return;
+	if (saveOnOptionToggle) submit(true);
+	else runNoSave();
 }
 bindToggle(els.optCase, 'isCaseSensitive');
 bindToggle(els.optWord, 'matchWholeWord');
@@ -119,12 +135,8 @@ els.toggleDetails.addEventListener('click', () => {
 	if (detailsVisible) els.include.focus();
 });
 
-function submit(save) {
-	const state = collect();
-	if (state.query.trim() === '') { if (save) els.query.focus(); return; }
-	clearTimeout(typeTimer);
-	hideSuggestions();
-	vscode.postMessage({ type: save ? 'run' : 'preview', params: {
+function paramsFromState(state) {
+	return {
 		query: state.query,
 		replaceText: state.replaceText,
 		filesToInclude: state.filesToInclude,
@@ -132,7 +144,25 @@ function submit(save) {
 		isRegex: state.isRegex,
 		isCaseSensitive: state.isCaseSensitive,
 		matchWholeWord: state.matchWholeWord,
-	}});
+	};
+}
+
+function submit(save) {
+	const state = collect();
+	if (state.query.trim() === '') { if (save) els.query.focus(); return; }
+	clearTimeout(typeTimer);
+	hideSuggestions();
+	vscode.postMessage({ type: save ? 'run' : 'preview', params: paramsFromState(state) });
+}
+
+// Run the current search but do not save it to history — used by a match-option
+// toggle when re-running is on but saving toggled runs is off.
+function runNoSave() {
+	const state = collect();
+	if (state.query.trim() === '') return;
+	clearTimeout(typeTimer);
+	hideSuggestions();
+	vscode.postMessage({ type: 'runNoSave', params: paramsFromState(state) });
 }
 
 function schedulePreview() {
@@ -268,6 +298,29 @@ function clearResultsUI() {
 	els.openNative.hidden = true;
 }
 
+// Wipe every input field and the results; backs the "Clear Search" title action.
+function clearInputs() {
+	els.query.value = '';
+	els.replace.value = '';
+	els.include.value = '';
+	els.exclude.value = '';
+	clearTimeout(typeTimer);
+	hideSuggestions();
+	clearResultsUI();
+	persist();
+	els.query.focus();
+}
+
+// Reset the three match options without firing a search; backs "Clear Match Options".
+function clearOptions() {
+	flags.isCaseSensitive = false;
+	flags.matchWholeWord = false;
+	flags.isRegex = false;
+	renderFlags();
+	persist();
+	els.query.focus();
+}
+
 function renderFile(file) {
 	const wrap = document.createElement('div');
 	wrap.className = 'file';
@@ -359,10 +412,14 @@ window.addEventListener('message', (event) => {
 			searchOnType = !!msg.searchOnType;
 			searchOnTypeDelay = msg.delay || 300;
 			showSuggestions = !!msg.showSuggestions;
+			rerunOnOptionToggle = !!msg.rerunOnOptionToggle;
+			saveOnOptionToggle = !!msg.saveOnOptionToggle;
 			if (!showSuggestions) hideSuggestions();
 			applyConfig();
 			break;
 		case 'prefill': applySuggestion({ ...msg.params, favorite: false }); els.query.focus(); break;
+		case 'clearInputs': clearInputs(); break;
+		case 'clearOptions': clearOptions(); break;
 		case 'searchStarted':
 			clearResults();
 			els.status.hidden = false;

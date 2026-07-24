@@ -2,7 +2,7 @@
   "name": "vscode-search-history",
   "displayName": "Search History Explorer",
   "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "license": "MIT",
   "publisher": "ActiveClientMods",
   "icon": "media/icon.png",
@@ -164,6 +164,24 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "searchHistory.refreshSearch",
+        "title": "Refresh Search & History",
+        "category": "Search History",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "searchHistory.clearSearchInputs",
+        "title": "Clear Search",
+        "category": "Search History",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "searchHistory.clearSearchOptions",
+        "title": "Clear Match Options",
+        "category": "Search History",
+        "icon": "$(discard)"
+      },
+      {
         "command": "searchHistory.addFavorite",
         "title": "Add to Favorites",
         "category": "Search History",
@@ -216,6 +234,18 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "searchHistory.refreshSearch",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.clearSearchInputs",
+          "when": "false"
+        },
+        {
+          "command": "searchHistory.clearSearchOptions",
+          "when": "false"
+        },
+        {
           "command": "searchHistory.runEntry",
           "when": "false"
         },
@@ -261,6 +291,21 @@
         }
       ],
       "view/title": [
+        {
+          "command": "searchHistory.refreshSearch",
+          "when": "view == searchHistory.searchBar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "searchHistory.clearSearchInputs",
+          "when": "view == searchHistory.searchBar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "searchHistory.clearSearchOptions",
+          "when": "view == searchHistory.searchBar",
+          "group": "navigation@3"
+        },
         {
           "command": "searchHistory.newSearch",
           "when": "view == searchHistory.view",
@@ -450,6 +495,16 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Show a dropdown of matching past searches while typing in the search bar. Off by default, since the dropdown can overlap the Replace and include/exclude fields."
+        },
+        "searchHistory.rerunOnOptionToggle": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Re-run the current search automatically when you toggle **Match Case**, **Whole Word** or **Regex** in the search bar. When off, toggling an option only updates the flag — press Enter (or the **Search & Save** button) to run with the new options."
+        },
+        "searchHistory.saveOnOptionToggle": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When a match-option toggle re-runs the search, also save that run to history. Only applies when `#searchHistory.rerunOnOptionToggle#` is enabled; if this is off, the toggled search runs but is saved only when you press Enter, use **Search & Save**, or open one of its results."
         }
       }
     }

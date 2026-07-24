@@ -31,24 +31,36 @@ Create a folder with **New Folder** (`⊞` in the title bar) — it's created in
 
 ## Title-bar controls
 
-| Control | Action |
-| --- | --- |
-| Add | Focus the search bar to start a new search |
-| New Folder | Create a folder in the current scope |
-| Globe / Folder | Switch between Global and Workspace scope |
-| Filter & Sort | Dropdown: text/regex filter, filter by tag, favorites-only, clear filter |
-| `…` overflow | Refresh, Clear history (current workspace or everything) |
+**Search view** (the search bar):
+
+| Control             | Action                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Refresh             | Re-run the active search (refreshing the in-view results, no new history entry) and reload the history list |
+| Clear Search        | Empty the query, replace and include/exclude fields (and clear the in-view results)                         |
+| Clear Match Options | Uncheck Match Case, Whole Word and Regex (without running a search)                                         |
+
+**History view:**
+
+| Control        | Action                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| Add            | Focus the search bar to start a new search                                               |
+| New Folder     | Create a folder in the current scope                                                     |
+| Globe / Folder | Switch between Global and Workspace scope                                                |
+| Filter & Sort  | Dropdown: text/regex filter, filter by tag, favorites-only, clear filter                 |
+| `…` overflow   | Refresh (reloads the history list only), Clear history (current workspace or everything) |
 
 ## Settings
 
-| Setting                           | Default | Description                                                                                       |
-| --------------------------------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `searchHistory.maxEntries`        | `5000`  | Maximum entries to retain. Favorites are never pruned; the oldest non-favorites go first.         |
-| `searchHistory.deduplicate`       | `true`  | Fold identical re-runs into the existing entry.                                                   |
-| `searchHistory.maxResults`        | `5000`  | Maximum matches to show in the in-view results list before the search stops early.                |
-| `searchHistory.searchOnType`      | `false` | Search as you type; each query you pause on is saved automatically and the Search & Save button hides. |
-| `searchHistory.searchOnTypeDelay` | `300`   | Debounce delay (ms) before a search runs (as-you-type and after a file edit).                     |
-| `searchHistory.showSuggestions`   | `false` | Show a dropdown of matching past searches while typing in the search bar.                          |
+| Setting                             | Default | Description                                                                                              |
+| ----------------------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `searchHistory.maxEntries`          | `5000`  | Maximum entries to retain. Favorites are never pruned; the oldest non-favorites go first.                |
+| `searchHistory.deduplicate`         | `true`  | Fold identical re-runs into the existing entry.                                                          |
+| `searchHistory.maxResults`          | `5000`  | Maximum matches to show in the in-view results list before the search stops early.                       |
+| `searchHistory.searchOnType`        | `false` | Search as you type; each query you pause on is saved automatically and the Search & Save button hides.   |
+| `searchHistory.searchOnTypeDelay`   | `300`   | Debounce delay (ms) before a search runs (as-you-type and after a file edit).                            |
+| `searchHistory.showSuggestions`     | `false` | Show a dropdown of matching past searches while typing in the search bar.                                |
+| `searchHistory.rerunOnOptionToggle` | `true`  | Re-run the current search when you toggle Match Case, Whole Word or Regex. Off = only update the flag.   |
+| `searchHistory.saveOnOptionToggle`  | `true`  | When a match-option toggle re-runs the search, also save that run to history (only if re-running is on). |
 
 ## Architecture
 
@@ -78,14 +90,14 @@ By default the extension **rebinds `Ctrl+Shift+F`** to focus its search bar, so 
 The source is grouped by concern: a `vscode`-light domain layer (`core`), the
 search engines (`search`), the UI (`views`), and command wiring (`commands`).
 
-| Path                                     | Responsibility                                                                                                                                                       |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/extension.ts`                       | Activation: constructs the store, tree view and search-bar, then wires commands and events.                                                                          |
-| `src/core/`                              | Storage-agnostic domain layer. `types` (shared types), `storage` (`Memento` CRUD, dedupe & pruning), `filter` (pure filter/sort, no `vscode`), `workspace` (stable identity). |
-| `src/search/`                            | Text search. `engineCore` (shared types/helpers), `ripgrepEngine`, `jsEngine`, `searchEngine` (backend dispatcher + public API), `searchRunner` (native Find-in-Files hand-off). |
-| `src/views/`                             | The UI. `searchBarView` (search-bar webview host), `historyProvider` (`TreeDataProvider` + drag/drop + view chrome), `treeItems` (TreeItem classes), `treeFormatting` (label/tooltip rendering). |
-| `src/commands/`                          | Command handlers grouped by concern — `entryCommands`, `folderCommands`, `filterCommands` — plus shared `helpers` and the `registerCommands` entry point.            |
-| `media/searchBar.css`, `media/searchBar.js` | The search-bar webview's stylesheet and client script, loaded from disk via `asWebviewUri` (kept out of the `.ts` so they get proper tooling).                    |
+| Path                                        | Responsibility                                                                                                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/extension.ts`                          | Activation: constructs the store, tree view and search-bar, then wires commands and events.                                                                                                      |
+| `src/core/`                                 | Storage-agnostic domain layer. `types` (shared types), `storage` (`Memento` CRUD, dedupe & pruning), `filter` (pure filter/sort, no `vscode`), `workspace` (stable identity).                    |
+| `src/search/`                               | Text search. `engineCore` (shared types/helpers), `ripgrepEngine`, `jsEngine`, `searchEngine` (backend dispatcher + public API), `searchRunner` (native Find-in-Files hand-off).                 |
+| `src/views/`                                | The UI. `searchBarView` (search-bar webview host), `historyProvider` (`TreeDataProvider` + drag/drop + view chrome), `treeItems` (TreeItem classes), `treeFormatting` (label/tooltip rendering). |
+| `src/commands/`                             | Command handlers grouped by concern — `entryCommands`, `folderCommands`, `filterCommands` — plus shared `helpers` and the `registerCommands` entry point.                                        |
+| `media/searchBar.css`, `media/searchBar.js` | The search-bar webview's stylesheet and client script, loaded from disk via `asWebviewUri` (kept out of the `.ts` so they get proper tooling).                                                   |
 
 ## Development
 
