@@ -13,7 +13,9 @@ export interface EngineMatch {
 	line: number; // 1-based
 	column: number; // 0-based, inclusive
 	endColumn: number; // 0-based, exclusive
-	preview: string; // the (truncated) line text
+	preview: string; // the line text, possibly only a slice of it (see previewStart)
+	/** Column {@link preview} starts at, so `column` stays a real document coordinate. */
+	previewStart: number;
 }
 
 /** All matches within one file. */
@@ -39,7 +41,10 @@ export interface RunOptions {
 	onFile: (file: EngineFile) => void;
 }
 
-export const PREVIEW_LIMIT = 400;
+/** How much of a matched line is carried to the UI at most. */
+export const PREVIEW_LIMIT = 1000;
+/** Characters kept in front of the match when a line has to be cut down. */
+export const PREVIEW_LEAD = 100;
 export const MAX_FILES = 20000;
 
 export const EMPTY: EngineOutcome = { fileCount: 0, matchCount: 0, truncated: false, engine: 'js' };
@@ -52,9 +57,22 @@ export function splitGlobs(value: string): string[] {
 		.filter((g) => g !== '');
 }
 
-export function truncatePreview(line: string): string {
+/**
+ * The slice of a matched line worth sending on, together with the column it
+ * starts at.
+ *
+ * A very long line (a minified bundle, a data blob) must be cut down, but
+ * cutting it from the left throws away exactly the match the user is looking
+ * for — the reason a hit near the end of a long line used to show up as an
+ * apparently empty result row. So the slice is taken *around* the match.
+ */
+export function previewSlice(line: string, matchStart: number): { text: string; start: number } {
 	const stripped = line.replace(/\r?\n$/, '');
-	return stripped.length > PREVIEW_LIMIT ? stripped.slice(0, PREVIEW_LIMIT) + '…' : stripped;
+	if (stripped.length <= PREVIEW_LIMIT) {
+		return { text: stripped, start: 0 };
+	}
+	const start = Math.max(0, Math.min(matchStart - PREVIEW_LEAD, stripped.length - PREVIEW_LIMIT));
+	return { text: stripped.slice(start, start + PREVIEW_LIMIT), start };
 }
 
 export function relativePath(uri: vscode.Uri, multiRoot: boolean): string {

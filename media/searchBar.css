@@ -16,7 +16,7 @@ body {
 }
 .bar { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; }
 .query-row { position: relative; display: flex; align-items: center; gap: 2px; }
-.field-row { display: flex; }
+.field-row { display: flex; align-items: center; }
 .field {
 	position: relative;
 	display: flex;
@@ -125,6 +125,13 @@ body {
 	color: var(--vscode-foreground);
 	opacity: 0.9;
 }
+/* Replace All sits next to the Replace field, the way the native widget puts its
+   replace action beside the input: an icon that names itself on hover, so a
+   narrow sidebar is not dominated by a labelled button. */
+.replace-all { margin-left: 2px; }
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+.icon-btn:disabled:hover { background: transparent; opacity: 0.35; }
+.icon-btn svg { display: block; }
 .actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .run {
 	padding: 4px 12px;
@@ -210,7 +217,17 @@ body {
 }
 .file-head:hover { background: var(--vscode-list-hoverBackground); }
 .file-twisty { flex: 0 0 auto; width: 12px; text-align: center; opacity: 0.8; font-size: 10px; }
-.file-name { overflow: hidden; text-overflow: ellipsis; }
+.file-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+/* Row actions follow the tree convention: revealed on hover / keyboard focus. */
+.row-action {
+	margin-left: auto;
+	width: 18px;
+	height: 18px;
+	visibility: hidden;
+}
+.file-head:hover .row-action,
+.match:hover .row-action,
+.row-action:focus-visible { visibility: visible; }
 .file-count {
 	flex: 0 0 auto;
 	margin-left: 4px;
@@ -240,9 +257,28 @@ body {
 	opacity: 0.5;
 	font-variant-numeric: tabular-nums;
 }
-.match .mtext { overflow: hidden; text-overflow: ellipsis; font-family: var(--vscode-editor-font-family, monospace); }
+.match .mtext {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-family: var(--vscode-editor-font-family, monospace);
+}
 .match .hl {
 	color: var(--vscode-editor-findMatchHighlightForeground, inherit);
 	background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
 	border-radius: 2px;
+}
+/* Marks where the host trimmed the line to keep the match on screen. */
+.match .elided { opacity: 0.5; padding: 0 1px; }
+/* Replace preview: the old text struck through, the new text beside it — so you
+   can see the outcome before committing to it. */
+.results.replacing .match .hl.replaced {
+	text-decoration: line-through;
+	background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2));
+	opacity: 0.7;
+}
+.match .hl.added {
+	background: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.2));
+	color: var(--vscode-editor-foreground, inherit);
 }

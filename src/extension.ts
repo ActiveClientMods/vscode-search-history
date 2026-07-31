@@ -48,6 +48,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	registerCommands(context, { store, provider, searchBar });
 
+	// Anything that can change what a search would find has to invalidate the
+	// results, or the list quietly keeps describing an older workspace: edits in
+	// open editors, and files appearing/changing/vanishing on disk (a save, a
+	// branch switch, a build). The provider debounces these and holds the
+	// invalidation while its view is hidden.
+	const watcher = vscode.workspace.createFileSystemWatcher('**/*');
+	const onFilesChanged = () => searchBar.onWorkspaceFilesChanged();
+
 	context.subscriptions.push(
 		view,
 		vscode.workspace.onDidChangeConfiguration((e) => {
@@ -57,10 +65,11 @@ export function activate(context: vscode.ExtensionContext): void {
 				void searchBar.pushConfig();
 			}
 		}),
-		// Live-refresh the in-view results as files are edited, like the native
-		// Search view. The provider debounces and ignores this unless a search is
-		// currently shown.
 		vscode.workspace.onDidChangeTextDocument((e) => searchBar.onDocumentChanged(e)),
+		watcher,
+		watcher.onDidCreate(onFilesChanged),
+		watcher.onDidChange(onFilesChanged),
+		watcher.onDidDelete(onFilesChanged),
 		vscode.workspace.onDidChangeWorkspaceFolders(() => provider.syncContext()),
 	);
 }

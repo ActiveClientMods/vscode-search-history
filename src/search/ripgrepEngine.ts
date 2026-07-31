@@ -15,9 +15,9 @@ import {
 	type EngineFile,
 	type EngineOutcome,
 	type RunOptions,
+	previewSlice,
 	relativePath,
 	splitGlobs,
-	truncatePreview,
 } from './engineCore';
 
 /** Best-effort location of the ripgrep binary bundled inside VS Code itself. */
@@ -132,13 +132,15 @@ export function runRipgrep(
 			} else if (obj.type === 'match' && current) {
 				const lineNo = obj.data.line_number ?? 0;
 				const lineText = rgText(obj.data.lines) ?? '';
-				const preview = truncatePreview(lineText);
 				for (const sm of obj.data.submatches ?? []) {
+					const column = byteToChar(lineText, sm.start);
+					const preview = previewSlice(lineText, column);
 					current.matches.push({
 						line: lineNo,
-						column: byteToChar(lineText, sm.start),
+						column,
 						endColumn: byteToChar(lineText, sm.end),
-						preview,
+						preview: preview.text,
+						previewStart: preview.start,
 					});
 					matchCount += 1;
 					if (matchCount >= opts.maxMatches) {

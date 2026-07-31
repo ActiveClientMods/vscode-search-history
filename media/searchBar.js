@@ -1,7 +1,11 @@
 // Client script for the Search History search bar webview. Loaded from disk via
-// a nonce'd <script src> (see SearchBarViewProvider.getHtml). Plain browser JS —
-// it runs in the webview, not the extension host, so it has no `vscode` module,
-// only the `acquireVsCodeApi` bridge.
+// a nonce'd <script src> (see buildSearchBarHtml). Plain browser JS — it runs in
+// the webview, not the extension host, so it has no `vscode` module, only the
+// `acquireVsCodeApi` bridge.
+//
+// It is deliberately thin: the host sends result lines already grouped, already
+// windowed around their match and already carrying their replacement preview,
+// so everything below is either event wiring or DOM assembly.
 
 const vscode = acquireVsCodeApi();
 
@@ -15,6 +19,7 @@ const els = {
 	detailsRow: $('detailsRow'),
 	toggleReplace: $('toggleReplace'),
 	toggleDetails: $('toggleDetails'),
+	replaceAll: $('replaceAll'),
 	suggestions: $('suggestions'),
 	optCase: $('opt-case'),
 	optWord: $('opt-word'),
@@ -42,6 +47,8 @@ let typeTimer;
 // also saved to history (the latter only applies when re-running is on).
 let rerunOnOptionToggle = true;
 let saveOnOptionToggle = true;
+let replaceTextTimer;
+let hasResults = false;
 
 // Restore any state kept across webview reloads.
 const saved = vscode.getState();
@@ -88,6 +95,12 @@ function renderReplace() {
 function renderDetails() {
 	els.detailsRow.classList.toggle('open', detailsVisible);
 	els.toggleDetails.setAttribute('aria-pressed', String(detailsVisible));
+}
+
+// Replacing is only meaningful once a search has produced something to replace.
+function renderReplaceEnabled() {
+	els.replaceAll.disabled = !hasResults;
+	els.results.classList.toggle('replacing', els.replace.value !== '');
 }
 
 // In search-as-you-type mode there is nothing to press: the Search & Save button
@@ -172,18 +185,43 @@ function schedulePreview() {
 	typeTimer = setTimeout(() => submit(false), searchOnTypeDelay);
 }
 
+function requestReplaceAll() {
+	if (!hasResults) { els.query.focus(); return; }
+	vscode.postMessage({ type: 'replaceAll' });
+}
+
 els.run.addEventListener('click', () => submit(true));
+els.replaceAll.addEventListener('click', requestReplaceAll);
+// Re-running the visible results is the search bar's own title-bar Refresh
+// action (searchHistory.refreshSearch), which reloads the history list too.
 els.openNative.addEventListener('click', () => vscode.postMessage({ type: 'openInNative' }));
 
 for (const input of [els.query, els.replace, els.include, els.exclude]) {
 	input.addEventListener('input', persist);
 	input.addEventListener('keydown', (e) => {
-		if (e.key === 'Enter') { e.preventDefault(); submit(true); }
+		if (e.key !== 'Enter') return;
+		// An open suggestion list owns Enter (handled by its own listener below).
+		if (input === els.query && !els.suggestions.hidden && activeSuggestion >= 0) return;
+		e.preventDefault();
+		// Enter inside the Replace field replaces — searching again from there was
+		// the one thing it could never usefully mean.
+		if (input === els.replace || e.ctrlKey || e.metaKey || e.altKey) requestReplaceAll();
+		else submit(true);
 	});
 }
 for (const input of [els.include, els.exclude]) {
 	input.addEventListener('input', schedulePreview);
 }
+
+// Editing the replacement changes only what the inline preview shows, so ask the
+// host to re-render the results it already has rather than searching again.
+els.replace.addEventListener('input', () => {
+	renderReplaceEnabled();
+	clearTimeout(replaceTextTimer);
+	replaceTextTimer = setTimeout(() => {
+		vscode.postMessage({ type: 'replaceTextChanged', replaceText: els.replace.value });
+	}, 200);
+});
 
 // --- Suggestions -----------------------------------------------------------
 
@@ -245,6 +283,7 @@ function applySuggestion(item) {
 		detailsVisible = true; renderDetails();
 	}
 	renderFlags();
+	renderReplaceEnabled();
 	persist();
 	hideSuggestions();
 	els.query.focus();
@@ -290,10 +329,12 @@ function flagLabel(item) {
 
 function clearResults() {
 	els.results.replaceChildren();
+	hasResults = false;
+	renderReplaceEnabled();
 }
 
 function clearResultsUI() {
-	els.results.replaceChildren();
+	clearResults();
 	els.status.hidden = true;
 	els.openNative.hidden = true;
 }
@@ -305,8 +346,10 @@ function clearInputs() {
 	els.include.value = '';
 	els.exclude.value = '';
 	clearTimeout(typeTimer);
+	clearTimeout(replaceTextTimer);
 	hideSuggestions();
 	clearResultsUI();
+	renderReplaceEnabled();
 	persist();
 	els.query.focus();
 }
@@ -319,6 +362,58 @@ function clearOptions() {
 	renderFlags();
 	persist();
 	els.query.focus();
+}
+
+// --- Icons -----------------------------------------------------------------
+//
+// The CSP allows the webview no external resources, so VS Code's codicon font is
+// unavailable and the replace actions draw their own glyphs. Both read the same
+// way as the native ones: a source box, an arrow, and the filled replacement —
+// with two source boxes when the action covers every match.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const OUTLINE = { rx: 1, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.2 };
+const ARROW_TO_REPLACEMENT = [
+	['path', { d: 'M5.8 8H9.4', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.2 }],
+	['path', { d: 'M8.9 6.2L11.3 8L8.9 9.8Z', fill: 'currentColor' }],
+	['rect', { x: 11.5, y: 5.5, width: 4, height: 5, rx: 1, fill: 'currentColor' }],
+];
+const ICON_REPLACE = [['rect', { x: 0.6, y: 5.5, width: 4.6, height: 5, ...OUTLINE }], ...ARROW_TO_REPLACEMENT];
+const ICON_REPLACE_ALL = [
+	['rect', { x: 0.6, y: 1, width: 4.6, height: 4.6, ...OUTLINE }],
+	['rect', { x: 0.6, y: 10.4, width: 4.6, height: 4.6, ...OUTLINE }],
+	...ARROW_TO_REPLACEMENT,
+];
+
+function svgIcon(shapes) {
+	const svg = document.createElementNS(SVG_NS, 'svg');
+	svg.setAttribute('viewBox', '0 0 16 16');
+	svg.setAttribute('width', '14');
+	svg.setAttribute('height', '14');
+	svg.setAttribute('aria-hidden', 'true');
+	svg.setAttribute('focusable', 'false');
+	for (const [tag, attrs] of shapes) {
+		const node = document.createElementNS(SVG_NS, tag);
+		for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, String(value));
+		svg.appendChild(node);
+	}
+	return svg;
+}
+
+// A discrete icon button: the label lives in the tooltip, like every other
+// button in the bar, so a narrow sidebar is not dominated by a word.
+function makeIconButton(className, icon, title, onClick) {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = className;
+	button.title = title;
+	button.setAttribute('aria-label', title);
+	button.appendChild(svgIcon(icon));
+	button.addEventListener('click', (e) => {
+		e.stopPropagation(); // never open the file / collapse the group as a side effect
+		onClick();
+	});
+	return button;
 }
 
 function renderFile(file) {
@@ -336,20 +431,19 @@ function renderFile(file) {
 	name.title = file.path;
 	const count = document.createElement('span');
 	count.className = 'file-count';
-	count.textContent = String(file.matches.length);
-	head.append(twisty, name, count);
+	count.textContent = String(file.matchCount);
+	const replaceInFile = makeIconButton(
+		'icon-btn row-action',
+		ICON_REPLACE_ALL,
+		'Replace every match in this file',
+		() => vscode.postMessage({ type: 'replaceFile', uri: file.uri }),
+	);
+	head.append(twisty, name, replaceInFile, count);
 
 	const body = document.createElement('div');
 	body.className = 'file-matches';
-
-	// Group occurrences by line so a line with several hits renders once.
-	const byLine = new Map();
-	for (const m of file.matches) {
-		if (!byLine.has(m.line)) byLine.set(m.line, { preview: m.preview, ranges: [] });
-		byLine.get(m.line).ranges.push([m.column, m.endColumn]);
-	}
-	for (const [line, info] of byLine) {
-		body.appendChild(renderMatchLine(file, line, info));
+	for (const line of file.lines) {
+		body.appendChild(renderMatchLine(file, line));
 	}
 
 	head.addEventListener('click', () => {
@@ -362,43 +456,72 @@ function renderFile(file) {
 	return wrap;
 }
 
-function renderMatchLine(file, line, info) {
+function renderMatchLine(file, line) {
 	const row = document.createElement('div');
 	row.className = 'match';
+
 	const ln = document.createElement('span');
 	ln.className = 'ln';
-	ln.textContent = String(line);
+	ln.textContent = String(line.line);
+
 	const text = document.createElement('span');
 	text.className = 'mtext';
-	appendHighlighted(text, info.preview, info.ranges);
-	row.append(ln, text);
-	const first = info.ranges[0];
+	appendLine(text, line);
+
+	const count = line.matches.length;
+	const action = makeIconButton(
+		'icon-btn row-action',
+		count === 1 ? ICON_REPLACE : ICON_REPLACE_ALL,
+		count === 1 ? 'Replace this match' : `Replace ${count} matches on this line`,
+		() => vscode.postMessage({ type: 'replaceMatches', uri: file.uri, matches: line.matches }),
+	);
+
+	row.append(ln, text, action);
+	const first = line.matches[0];
 	row.addEventListener('click', () => {
-		vscode.postMessage({ type: 'openMatch', uri: file.uri, line, column: first[0], endColumn: first[1] });
+		vscode.postMessage({
+			type: 'openMatch',
+			uri: file.uri,
+			line: line.line,
+			column: first.column,
+			endColumn: first.endColumn,
+		});
 	});
 	return row;
 }
 
-function appendHighlighted(container, preview, ranges) {
-	// Trim leading indentation for display while keeping click offsets accurate.
-	const lead = preview.length - preview.trimStart().length;
-	const display = preview.slice(lead);
-	const sorted = ranges
-		.map(([s, e]) => [Math.max(0, s - lead), Math.max(0, e - lead)])
-		.filter(([s, e]) => e > s)
-		.sort((a, b) => a[0] - b[0]);
-
+// The host has already dropped indentation and windowed the line around its
+// first match, so a hit at column 300 is visible without scrolling; the elision
+// flags say whether text was cut off on either side.
+function appendLine(container, line) {
+	if (line.leadingElided) container.appendChild(ellipsis());
 	let cursor = 0;
-	for (const [s, e] of sorted) {
-		if (s < cursor) continue; // overlapping/duplicate range
-		if (s > cursor) container.appendChild(document.createTextNode(display.slice(cursor, s)));
+	for (const hl of line.highlights) {
+		if (hl.start < cursor) continue; // overlapping/duplicate range
+		if (hl.start > cursor) container.appendChild(document.createTextNode(line.text.slice(cursor, hl.start)));
 		const mark = document.createElement('span');
 		mark.className = 'hl';
-		mark.textContent = display.slice(s, e);
+		mark.textContent = line.text.slice(hl.start, hl.end);
 		container.appendChild(mark);
-		cursor = e;
+		if (hl.replacement !== undefined && hl.replacement !== null) {
+			mark.classList.add('replaced');
+			const added = document.createElement('span');
+			added.className = 'hl added';
+			added.textContent = hl.replacement;
+			container.appendChild(added);
+		}
+		cursor = hl.end;
 	}
-	if (cursor < display.length) container.appendChild(document.createTextNode(display.slice(cursor)));
+	if (cursor < line.text.length) container.appendChild(document.createTextNode(line.text.slice(cursor)));
+	if (line.trailingElided) container.appendChild(ellipsis());
+}
+
+function ellipsis() {
+	const span = document.createElement('span');
+	span.className = 'elided';
+	span.textContent = '…';
+	span.title = 'Line trimmed so the match stays visible';
+	return span;
 }
 
 // --- Host messages ---------------------------------------------------------
@@ -427,10 +550,19 @@ window.addEventListener('message', (event) => {
 			els.statusText.textContent = 'Searching…';
 			break;
 		case 'results':
-			for (const file of msg.files) els.results.appendChild(renderFile(file));
+			for (const file of msg.files) {
+				els.results.appendChild(renderFile(file));
+				if (file.matchCount > 0) hasResults = true;
+			}
+			renderReplaceEnabled();
 			break;
 		case 'searchDone':
 			els.statusText.textContent = summarize(msg);
+			hasResults = msg.matchCount > 0 && !msg.error;
+			renderReplaceEnabled();
+			break;
+		case 'replaceDone':
+			els.statusText.textContent = msg.message;
 			break;
 	}
 });
@@ -443,9 +575,11 @@ function summarize(msg) {
 	return results + ' in ' + files + (msg.truncated ? ' (showing first ' + msg.matchCount + ')' : '');
 }
 
+els.replaceAll.appendChild(svgIcon(ICON_REPLACE_ALL));
 renderFlags();
 renderReplace();
 renderDetails();
+renderReplaceEnabled();
 applyConfig();
 els.query.focus();
 vscode.postMessage({ type: 'ready' });

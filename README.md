@@ -7,7 +7,9 @@ Search History Explorer adds a dedicated **Search History** view to the Activity
 ## Features
 
 - **Native-style search bar** — a search box that mirrors VS Code's own **Find in Files** widget (query + **Match Case / Whole Word / Regex** toggles that highlight when active, plus **Replace** and clearly-labelled **Include / Exclude** fields), docked at the top of the view. Running a search from here saves it and launches the native panel.
-- **Results in the view** — press Enter and the matches appear **right below the search bar**, grouped by file with the matching line and highlighted hit; click any line to jump straight to it in the editor. No context switch — one window for searching, results and history. Results **refresh live as you edit files** (debounced), just like the native Search view. A one-click **Open in VS Code Search** hands the same search to the native panel when you want it (e.g. to replace across files).
+- **Results in the view** — press Enter and the matches appear **right below the search bar**, grouped by file with the matching line and highlighted hit; click any line to jump straight to it in the editor. No context switch — one window for searching, results and history. Long lines are **trimmed around the match**, so a hit at the far end of a line is still the thing you see. A one-click **Open in VS Code Search** hands the same search to the native panel when you want it.
+- **Replace in the view** — type a replacement and use the **Replace All** icon beside the field (or `Enter` in it, or `Ctrl+Alt+Enter`), or replace just one file or one row from the icons that appear on hover. Matches are previewed struck-through with their replacement as you type. Replace All confirms first, and files are left unsaved so a single **Undo** reverts the lot. Regex replacements expand `$1`, `$&`, `$<name>` and `\n`.
+- **Results that stay current** — the list re-runs itself (debounced) when you edit a file, when files change on disk, and when you come back to the view after working elsewhere. **Unsaved editors are searched as they are on screen**, not as they were last saved.
 - **Search as you type** — turn on `searchHistory.searchOnType` and results update as you type; the **Search & Save** button hides and each query you pause on is **saved to history automatically**.
 - **Automatic capture** — rebind `Ctrl+Shift+F` to the bar (on by default) and every search you launch is appended to your history without any extra step. Optionally (via `searchHistory.showSuggestions`) matching past searches appear as a dropdown you can click to restore in full.
 - **Rich history** — each entry records the query, timestamp, workspace name, replace text, include/exclude globs, an optional free-text **note**, and the **Regex / Match Case / Whole Word** flags.
@@ -23,7 +25,8 @@ Search History Explorer adds a dedicated **Search History** view to the Activity
 1. Open the **Search History** view from the Activity Bar (the magnifier-with-clock icon), or press `Ctrl+Shift+F` (rebound to focus the bar — see [Capturing searches](#capturing-searches--running-them-in-view)).
 2. Type in the **search bar** at the top. Use the inline **Aa / ab / .\*** buttons to toggle Match Case, Whole Word and Regex — active toggles are highlighted just like the native Search box. Click the `›` chevron to reveal **Replace**, and fill the **files to include / exclude** fields as needed.
 3. Press **Enter** (or **Search & Save**): the search runs and its **results appear in the view**, grouped by file — click a line to open it at the match. The search is also saved to your history. Use **Open in VS Code Search** to hand it to the native panel.
-4. Later, click any entry to run it again, toggle its ⭐, or right-click for _Move to Folder…_, tags, **note**, copy and delete.
+4. To replace, open the **Replace** field and type the replacement — matches are previewed struck-through with their result. Then press **Enter** (or the **Replace All** icon beside the field, or `Ctrl+Alt+Enter`) to replace everywhere, or hover a file or a result row and use its replace icon for something narrower. Nothing is saved to disk, so `Ctrl+Z` undoes the whole replacement.
+5. Later, click any entry to run it again, toggle its ⭐, or right-click for _Move to Folder…_, tags, **note**, copy and delete.
 
 ## Folders
 
@@ -79,25 +82,29 @@ Because search history is naturally bounded (and capped via `maxEntries`), and b
 
 VS Code does **not** expose an API to observe or intercept queries typed into the native Search panel, nor a supported API to run a text search and read the results back (`workspace.findTextInFiles` is still a proposed API). Rather than depend on undocumented internals, this extension **owns the entry point**: its search bar captures the query, flags, replace text and globs at the moment you launch a search.
 
-To show results in the view, it **runs the search itself**: it prefers the `ripgrep` binary that ships inside VS Code, and falls back to a pure-`vscode`-API scan (`findFiles` + `readFile` + regex) if that binary cannot be located — so there are **no bundled native binaries** and the extension stays cross-platform. Results stream in file-by-file and respect your include/exclude globs (and, via the fallback, your `files.exclude` / `search.exclude` settings). For an exhaustive search over a very large repository, or to run a **replace across files**, use **Open in VS Code Search** to hand the same query to the native panel (via `workbench.action.findInFiles`).
+To show results in the view, it **runs the search itself**: it prefers the `ripgrep` binary that ships inside VS Code, and falls back to a pure-`vscode`-API scan (`findFiles` + `readFile` + regex) if that binary cannot be located — so there are **no bundled native binaries** and the extension stays cross-platform. Results stream in file-by-file and respect your include/exclude globs (and, via the fallback, your `files.exclude` / `search.exclude` settings). For an exhaustive search over a very large repository, use **Open in VS Code Search** to hand the same query to the native panel (via `workbench.action.findInFiles`).
+
+Both backends read from disk, which would mean an editor with unsaved changes gets searched in its last-saved state — precisely when you are iterating fastest. So files with unsaved changes are withheld from the backend's output and scanned from the in-memory document instead, honouring the same include/exclude scoping.
+
+Replacing goes through VS Code's `WorkspaceEdit`, the same mechanism a refactoring uses: files are left **unsaved** so one Undo reverts everything. Each target file is re-scanned at the moment you replace rather than trusting the displayed match positions, so a result row that has since gone stale can never rewrite the wrong text.
 
 By default the extension **rebinds `Ctrl+Shift+F`** to focus its search bar, so your usual search shortcut now captures automatically. If you prefer VS Code's built-in shortcut, remove the binding in **File → Preferences → Keyboard Shortcuts** (search for `searchHistory.newSearch`).
 
-**Known limitations:** searches you start by clicking the Search icon in the Activity Bar directly (bypassing the bar) are _not_ captured. The in-view results are **read-only** (find and jump); replacing across files is delegated to the native panel. Result fidelity closely follows ripgrep, but some `.gitignore` edge cases and context lines differ from the native Search view.
+**Known limitations:** searches you start by clicking the Search icon in the Activity Bar directly (bypassing the bar) are _not_ captured. Result fidelity closely follows ripgrep, but some `.gitignore` edge cases and context lines differ from the native Search view. Because replacements are applied with JavaScript's regular expressions while ripgrep matches with Rust's, a pattern using syntax only one of them supports can match in the results but not be replaced — such occurrences are skipped and reported rather than replaced incorrectly.
 
 ## Project layout
 
 The source is grouped by concern: a `vscode`-light domain layer (`core`), the
 search engines (`search`), the UI (`views`), and command wiring (`commands`).
 
-| Path                                        | Responsibility                                                                                                                                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/extension.ts`                          | Activation: constructs the store, tree view and search-bar, then wires commands and events.                                                                                                      |
-| `src/core/`                                 | Storage-agnostic domain layer. `types` (shared types), `storage` (`Memento` CRUD, dedupe & pruning), `filter` (pure filter/sort, no `vscode`), `workspace` (stable identity).                    |
-| `src/search/`                               | Text search. `engineCore` (shared types/helpers), `ripgrepEngine`, `jsEngine`, `searchEngine` (backend dispatcher + public API), `searchRunner` (native Find-in-Files hand-off).                 |
-| `src/views/`                                | The UI. `searchBarView` (search-bar webview host), `historyProvider` (`TreeDataProvider` + drag/drop + view chrome), `treeItems` (TreeItem classes), `treeFormatting` (label/tooltip rendering). |
-| `src/commands/`                             | Command handlers grouped by concern — `entryCommands`, `folderCommands`, `filterCommands` — plus shared `helpers` and the `registerCommands` entry point.                                        |
-| `media/searchBar.css`, `media/searchBar.js` | The search-bar webview's stylesheet and client script, loaded from disk via `asWebviewUri` (kept out of the `.ts` so they get proper tooling).                                                   |
+| Path                                        | Responsibility                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/extension.ts`                          | Activation: constructs the store, tree view and search-bar, then wires commands and events.                                                                                                                                                                                                                  |
+| `src/core/`                                 | Storage-agnostic domain layer. `types` (shared types), `storage` (`Memento` CRUD, dedupe & pruning), `filter` (pure filter/sort, no `vscode`), `workspace` (stable identity).                                                                                                                                |
+| `src/search/`                               | Text search and replace. `engineCore` (shared types/helpers), `ripgrepEngine`, `jsEngine`, `searchEngine` (backend dispatcher, unsaved-editor overlay, public API), `replaceEngine` (planning/applying replacements), `globMatch` (include/exclude scoping), `searchRunner` (native Find-in-Files hand-off). |
+| `src/views/`                                | The UI. `searchBarView` (search-bar webview host), `searchBarHtml` (its markup), `resultPreview` (windowing a matched line), `historyProvider` (`TreeDataProvider` + drag/drop + view chrome), `treeItems` (TreeItem classes), `treeFormatting` (label/tooltip rendering).                                   |
+| `src/commands/`                             | Command handlers grouped by concern — `entryCommands`, `folderCommands`, `filterCommands` — plus shared `helpers` and the `registerCommands` entry point.                                                                                                                                                    |
+| `media/searchBar.css`, `media/searchBar.js` | The search-bar webview's stylesheet and client script, loaded from disk via `asWebviewUri` (kept out of the `.ts` so they get proper tooling).                                                                                                                                                               |
 
 ## Development
 
@@ -111,7 +118,7 @@ bun run compile        # type-check, lint & bundle with esbuild
 bun run test           # headless VS Code integration + unit tests
 ```
 
-Tests run under `@vscode/test-electron`; on CI they are wrapped with `xvfb-run`.
+Tests run under `@vscode/test-electron`; on CI they are wrapped with `xvfb-run`. They open `src/test/workspace` as the workspace folder so the search and replace paths can be exercised against real files, driving the search bar end to end through a fake webview (`src/test/fakeWebviewView.ts`).
 
 ## License
 

@@ -2,6 +2,33 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-31
+
+### Added
+
+- **Replace and Replace All now actually work in the view.** The Replace field was previously write-only: it was stored with the entry and handed to the native panel, but nothing in the view ever acted on it, and pressing Enter in it simply re-ran the search. There is now a **Replace All** icon beside the field, a **replace-all-in-file** icon on every file row, and a **replace** icon on every result row (both revealed on hover, all three naming themselves on hover like the rest of the toolbar), plus keyboard access: **Enter** inside the Replace field, or **Ctrl+Alt+Enter** from anywhere in the bar. Replace All asks for confirmation first, files are left unsaved so a single **Undo** reverts the whole operation, and the results re-run afterwards so the list reflects the new text.
+  - Regex replacements expand capture groups (`$1`, `$&`, `$<name>`, `$$`) and the `\n` / `\t` / `\r` escapes; in literal mode the replacement is inserted verbatim, exactly as in VS Code's own Search view.
+  - Replacing re-scans the target file at the moment you act on it rather than trusting the displayed positions, so a stale result row can never rewrite the wrong text — it reports "the results were out of date" instead.
+- **An inline replacement preview**: with a replacement typed, each match is shown struck through with the resulting text beside it, updating as you type — no re-search, and no new history entries.
+
+### Fixed
+
+- **Results no longer go stale after edits.** Several things could leave the match list describing a workspace that no longer existed:
+  - Both search backends read from **disk**, so an editor with unsaved changes was searched in its last-saved state — you would edit, search again, and see the old matches. Files with unsaved changes are now scanned from the in-memory document instead, and the on-disk copy is withheld so nothing is reported twice.
+  - Edits made while the Search History view was **hidden** (switched to the Explorer, or the sidebar closed) were dropped entirely, and nothing re-ran when you came back. Such changes are now remembered and the search re-runs the moment the view is shown again — while hidden it stays idle rather than searching in the background.
+  - Only edits in open editors were noticed at all. Files created, changed or deleted **on disk** — a save, a branch switch, a build — now invalidate the results too.
+  - A webview rebuilt by VS Code (moving the view, reloading the window) came back with an empty result list; it now restores the current search's results.
+  - The search bar's **Refresh** action (added in 1.2.0) now also clears any pending automatic refresh, so a manual refresh is never immediately followed by a debounced one.
+- **A match near the end of a long line is now always visible.** Result rows previously rendered the whole line and let CSS clip it, so a hit far to the right showed up as an apparently empty row. Lines are now windowed around the match — leading indentation dropped, a bounded amount of context kept in front, the rest elided with `…` — while clicking still lands on the exact original position.
+- **Very long lines no longer lose their matches entirely.** The engine truncated every matched line at a fixed limit measured from the left, discarding exactly the matches that sat beyond it (in a minified file, all of them). The slice is now taken around the match.
+
+### Internal
+
+- New `search/replaceEngine` (planning and applying replacements), `search/globMatch` (include/exclude scoping for the unsaved-document overlay) and `views/resultPreview` (line windowing) modules, all pure and unit-tested; the search bar's markup moved to `views/searchBarHtml` so the presence of its controls can be asserted.
+- The results wire format is now line-grouped and pre-windowed by the extension host, leaving the webview script to do little more than assemble DOM.
+- Integration tests drive the search bar end to end through a fake webview against a real test workspace, covering replace, unsaved-edit visibility and result windowing.
+- **Clear Search** now also drops the retained result set, so nothing can be replaced across results that are no longer on screen.
+
 ## [1.2.0] - 2026-07-24
 
 ### Added
@@ -104,6 +131,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.3.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.3

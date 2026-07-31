@@ -13,9 +13,9 @@ import {
 	type EngineOutcome,
 	MAX_FILES,
 	type RunOptions,
+	previewSlice,
 	relativePath,
 	splitGlobs,
-	truncatePreview,
 } from './engineCore';
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
@@ -38,9 +38,12 @@ export function buildLineRegExp(params: SearchParams): { regex?: RegExp; error?:
 	}
 }
 
-/** All non-empty matches of `regex` within a single line (0-based columns). */
-export function matchLine(regex: RegExp, line: string): { column: number; endColumn: number }[] {
-	const out: { column: number; endColumn: number }[] = [];
+/**
+ * All non-empty matches of `regex` within a single line, as raw exec results so
+ * callers that need the capture groups (the replace engine) can have them.
+ */
+export function execLine(regex: RegExp, line: string): RegExpExecArray[] {
+	const out: RegExpExecArray[] = [];
 	regex.lastIndex = 0;
 	let m: RegExpExecArray | null;
 	while ((m = regex.exec(line)) !== null) {
@@ -48,9 +51,14 @@ export function matchLine(regex: RegExp, line: string): { column: number; endCol
 			regex.lastIndex += 1;
 			continue;
 		}
-		out.push({ column: m.index, endColumn: m.index + m[0].length });
+		out.push(m);
 	}
 	return out;
+}
+
+/** All non-empty matches of `regex` within a single line (0-based columns). */
+export function matchLine(regex: RegExp, line: string): { column: number; endColumn: number }[] {
+	return execLine(regex, line).map((m) => ({ column: m.index, endColumn: m.index + m[0].length }));
 }
 
 function isBinary(bytes: Uint8Array): boolean {
@@ -64,7 +72,7 @@ function isBinary(bytes: Uint8Array): boolean {
 }
 
 /** Default file/search excludes so the JS scan skips node_modules, .git, etc. */
-function defaultExcludeGlobs(): string[] {
+export function defaultExcludeGlobs(): string[] {
 	const cfg = vscode.workspace.getConfiguration();
 	const out = new Set<string>();
 	for (const key of ['files.exclude', 'search.exclude']) {
@@ -113,7 +121,14 @@ export async function runJsSearch(params: SearchParams, opts: RunOptions): Promi
 		const matches: EngineMatch[] = [];
 		for (let i = 0; i < lines.length && !truncated; i++) {
 			for (const found of matchLine(regex, lines[i])) {
-				matches.push({ line: i + 1, column: found.column, endColumn: found.endColumn, preview: truncatePreview(lines[i]) });
+				const preview = previewSlice(lines[i], found.column);
+				matches.push({
+					line: i + 1,
+					column: found.column,
+					endColumn: found.endColumn,
+					preview: preview.text,
+					previewStart: preview.start,
+				});
 				matchCount += 1;
 				if (matchCount >= opts.maxMatches) {
 					truncated = true;
