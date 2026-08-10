@@ -2,6 +2,12 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-08-10
+
+### Fixed
+
+- **Look-around and backreference regexes no longer fail with "Invalid regular expression".** In-view search drives the bundled ripgrep with its default (Rust `regex`) engine, which rejects look-ahead/look-behind (`(?=…)`, `(?<!…)`) and backreferences (`\1`) outright — so a pattern like `(?<![\[{\-])(?<![\[{\-]\s)\b\d+(?:[.,]\d+)?\b`, which works in VS Code's own Find in Files, errored here. Regex searches now pass `--engine=auto`, keeping the fast Rust engine for ordinary patterns and transparently falling back to PCRE2 for the ones that need it — the same hybrid strategy the native Search view uses, so a pattern that matches there matches here too. (The JS fallback engine and the replace path already use JavaScript's own `RegExp`, which supports these constructs natively.)
+
 ## [1.3.0] - 2026-07-31
 
 ### Added
@@ -131,6 +137,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.3.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.1.4

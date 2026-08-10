@@ -89,6 +89,8 @@ suite('searchEngine · buildRipgrepArgs', () => {
 		assert.ok(args.includes('--case-sensitive'));
 		assert.ok(args.includes('--word-regexp'));
 		assert.ok(args.includes('--fixed-strings'));
+		// Literal searches don't use the regex engine, so no engine flag.
+		assert.ok(!args.includes('--engine=auto'));
 		// Include globs are passed through; excludes are negated with '!'.
 		assert.ok(args.includes('src/**/*.ts'));
 		assert.ok(args.includes('!**/node_modules/**'));
@@ -104,5 +106,15 @@ suite('searchEngine · buildRipgrepArgs', () => {
 		assert.ok(args.includes('--ignore-case'));
 		assert.ok(!args.includes('--case-sensitive'));
 		assert.ok(!args.includes('--fixed-strings'));
+	});
+
+	test('enables the hybrid regex engine so look-around/backreferences work', () => {
+		// Ripgrep's default Rust engine rejects look-around outright; '--engine=auto'
+		// falls back to PCRE2 for such patterns, matching VS Code's native search.
+		const args = buildRipgrepArgs(
+			params({ query: '(?<![\\[{\\-])\\b\\d+\\b', isRegex: true }),
+			['/root'],
+		);
+		assert.ok(args.includes('--engine=auto'));
 	});
 });

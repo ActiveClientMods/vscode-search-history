@@ -56,7 +56,14 @@ export function buildRipgrepArgs(params: SearchParams, searchPaths: string[]): s
 	if (params.matchWholeWord) {
 		args.push('--word-regexp');
 	}
-	if (!params.isRegex) {
+	if (params.isRegex) {
+		// Ripgrep's default (Rust `regex`) engine rejects look-around and
+		// backreferences outright. `--engine=auto` keeps that fast engine for
+		// ordinary patterns and transparently falls back to PCRE2 for the ones
+		// that need it — the same hybrid strategy VS Code's own search uses, so
+		// a pattern that works in Find-in-Files works here too.
+		args.push('--engine=auto');
+	} else {
 		args.push('--fixed-strings');
 	}
 	for (const glob of splitGlobs(params.filesToInclude)) {
