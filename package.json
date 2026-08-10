@@ -2,7 +2,7 @@
   "name": "vscode-search-history",
   "displayName": "Search History Explorer",
   "description": "A powerful sidebar view to track, filter, tag, and reuse your VS Code search history globally and per workspace.",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "license": "MIT",
   "publisher": "ActiveClientMods",
   "icon": "media/icon.png",

@@ -15,10 +15,12 @@ import {
 	type EngineFile,
 	type EngineOutcome,
 	type RunOptions,
+	defaultExcludeGlobs,
 	previewSlice,
 	relativePath,
 	splitGlobs,
 } from './engineCore';
+import { normalizeSearchGlob } from './globMatch';
 
 /** Best-effort location of the ripgrep binary bundled inside VS Code itself. */
 export function locateRipgrep(existsSync: (p: string) => boolean = fs.existsSync): string | undefined {
@@ -49,10 +51,24 @@ export function locateRipgrep(existsSync: (p: string) => boolean = fs.existsSync
 	return undefined;
 }
 
-/** Build the ripgrep argument vector for the given search. */
-export function buildRipgrepArgs(params: SearchParams, searchPaths: string[]): string[] {
+/**
+ * Build the ripgrep argument vector for the given search.
+ *
+ * `defaultExcludes` are the user's `files.exclude` / `search.exclude` globs; we
+ * apply them (alongside `--hidden`) so results match VS Code's own search, which
+ * looks inside hidden folders like `.vscode/` but prunes `.git`, `node_modules`
+ * and the like — rather than ripgrep's default of silently skipping dotfiles.
+ */
+export function buildRipgrepArgs(
+	params: SearchParams,
+	searchPaths: string[],
+	defaultExcludes: readonly string[] = [],
+): string[] {
 	const args = ['--json'];
 	args.push(params.isCaseSensitive ? '--case-sensitive' : '--ignore-case');
+	// Search hidden files (still honouring .gitignore); `defaultExcludes` prunes
+	// `.git` etc. back out, exactly as VS Code's search does.
+	args.push('--hidden');
 	if (params.matchWholeWord) {
 		args.push('--word-regexp');
 	}
@@ -66,10 +82,16 @@ export function buildRipgrepArgs(params: SearchParams, searchPaths: string[]): s
 	} else {
 		args.push('--fixed-strings');
 	}
-	for (const glob of splitGlobs(params.filesToInclude)) {
+	// Globs are matched relative to ripgrep's working directory, not the (absolute)
+	// search roots — so an anchored `src/**` would never match. Expanding each
+	// pattern to VS Code's semantics (`src` → `**/src` + `**/src/**`) makes it
+	// match anywhere in the tree, the same way the native include/exclude fields do.
+	for (const glob of splitGlobs(params.filesToInclude).flatMap(normalizeSearchGlob)) {
 		args.push('--glob', glob);
 	}
-	for (const glob of splitGlobs(params.filesToExclude)) {
+	for (const glob of [...splitGlobs(params.filesToExclude), ...defaultExcludes].flatMap(
+		normalizeSearchGlob,
+	)) {
 		args.push('--glob', `!${glob}`);
 	}
 	// `--` ends option parsing so queries beginning with `-` are treated as the
@@ -105,7 +127,7 @@ export function runRipgrep(
 ): Promise<EngineOutcome> {
 	const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 	return new Promise((resolve) => {
-		const child = spawn(rgPath, buildRipgrepArgs(params, searchPaths));
+		const child = spawn(rgPath, buildRipgrepArgs(params, searchPaths, defaultExcludeGlobs()));
 		let matchCount = 0;
 		let fileCount = 0;
 		let truncated = false;

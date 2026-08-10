@@ -1,6 +1,21 @@
+<!-- markdownlint-disable MD024 -->
+
 # Change Log
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.3.2] - 2026-08-10
+
+### Fixed
+
+- **The “files to include” field now works.** Typing an include such as `src`, `src/`, or `src/**` returned **No results found** for every form. In-view search hands globs to ripgrep as `--glob`, which matches them relative to ripgrep's working directory — but the extension searches the workspace by **absolute path** from the extension-host's own directory, so an anchored `src/**` matched nothing. Include and exclude patterns are now expanded to VS Code's own glob semantics before being handed over — a bare `src` becomes `**/src` **and** `**/src/**`, a slashless name matches anywhere in the tree — so `src`, `src/` and `src/**` all scope to the `src` folder exactly as they do in the native Search view.
+- **In-view result counts now match VS Code's Search view.** Two differences are closed:
+  - Hidden files (`.vscode/`, `.github/`, dotfiles that aren't git-ignored) were **skipped**, because ripgrep ignores dotfiles by default while VS Code searches them. The engine now passes `--hidden`.
+  - The bundled-ripgrep path ignored your `files.exclude` / `search.exclude` settings entirely (it relied on `.gitignore` alone), so `.git` and other configured folders leaked in once hidden files were searched. Both settings are now applied to **both** engines — matching VS Code, which searches hidden files but prunes `.git`, `node_modules` and the like via those excludes. On this project the pattern from 1.3.1 now reports the same 1857 matches across 40 files as the native search, and the same figures under an include/exclude.
+
+### Internal
+
+- `defaultExcludeGlobs` (the `files.exclude` / `search.exclude` reader) moved to `search/engineCore` so both the ripgrep and JS backends share one definition, and glob normalization (`normalizeSearchGlob`) is now applied consistently across the ripgrep args, the JS `findFiles` scan and the unsaved-document overlay. New `buildRipgrepArgs` tests cover the hidden-file flag, include expansion and default-exclude negation.
 
 ## [1.3.1] - 2026-08-10
 
@@ -137,6 +152,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.3.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0

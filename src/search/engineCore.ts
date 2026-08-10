@@ -58,6 +58,29 @@ export function splitGlobs(value: string): string[] {
 }
 
 /**
+ * The user's `files.exclude` / `search.exclude` globs, so a search skips
+ * `node_modules`, `.git`, etc. — exactly the folders VS Code's own search hides.
+ *
+ * VS Code searches hidden files (e.g. `.vscode/`) but excludes `.git` via the
+ * default `files.exclude`; both engines therefore search hidden files and lean
+ * on these globs to prune `.git` and friends, so their result set matches the
+ * native Search view rather than ripgrep's dotfile-skipping default.
+ */
+export function defaultExcludeGlobs(): string[] {
+	const cfg = vscode.workspace.getConfiguration();
+	const out = new Set<string>();
+	for (const key of ['files.exclude', 'search.exclude']) {
+		const obj = cfg.get<Record<string, boolean>>(key) ?? {};
+		for (const [glob, on] of Object.entries(obj)) {
+			if (on) {
+				out.add(glob);
+			}
+		}
+	}
+	return [...out];
+}
+
+/**
  * The slice of a matched line worth sending on, together with the column it
  * starts at.
  *

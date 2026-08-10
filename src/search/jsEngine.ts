@@ -13,10 +13,14 @@ import {
 	type EngineOutcome,
 	MAX_FILES,
 	type RunOptions,
+	defaultExcludeGlobs,
 	previewSlice,
 	relativePath,
 	splitGlobs,
 } from './engineCore';
+import { normalizeSearchGlob } from './globMatch';
+
+export { defaultExcludeGlobs } from './engineCore';
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 
@@ -71,30 +75,20 @@ function isBinary(bytes: Uint8Array): boolean {
 	return false;
 }
 
-/** Default file/search excludes so the JS scan skips node_modules, .git, etc. */
-export function defaultExcludeGlobs(): string[] {
-	const cfg = vscode.workspace.getConfiguration();
-	const out = new Set<string>();
-	for (const key of ['files.exclude', 'search.exclude']) {
-		const obj = cfg.get<Record<string, boolean>>(key) ?? {};
-		for (const [glob, on] of Object.entries(obj)) {
-			if (on) {
-				out.add(glob);
-			}
-		}
-	}
-	return [...out];
-}
-
 export async function runJsSearch(params: SearchParams, opts: RunOptions): Promise<EngineOutcome> {
 	const { regex } = buildLineRegExp(params);
 	if (!regex) {
 		return { ...EMPTY, error: 'Invalid regular expression', regexInvalid: true };
 	}
 
-	const includes = splitGlobs(params.filesToInclude);
+	// Expand each user pattern into VS Code's glob semantics (a bare `src` also
+	// means `src/**`, a slashless name matches anywhere) so `findFiles` scopes
+	// the same way the search bar's include/exclude fields do in the native view.
+	const includes = splitGlobs(params.filesToInclude).flatMap(normalizeSearchGlob);
 	const includeGlob = includes.length === 0 ? '**/*' : `{${includes.join(',')}}`;
-	const excludes = [...splitGlobs(params.filesToExclude), ...defaultExcludeGlobs()];
+	const excludes = [...splitGlobs(params.filesToExclude), ...defaultExcludeGlobs()].flatMap(
+		normalizeSearchGlob,
+	);
 	const excludeGlob = excludes.length === 0 ? undefined : `{${excludes.join(',')}}`;
 
 	const uris = await vscode.workspace.findFiles(includeGlob, excludeGlob, MAX_FILES, opts.token);

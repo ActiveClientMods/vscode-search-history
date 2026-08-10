@@ -91,6 +91,8 @@ suite('searchEngine · buildRipgrepArgs', () => {
 		assert.ok(args.includes('--fixed-strings'));
 		// Literal searches don't use the regex engine, so no engine flag.
 		assert.ok(!args.includes('--engine=auto'));
+		// Hidden files are searched (like VS Code), pruned back by the excludes.
+		assert.ok(args.includes('--hidden'));
 		// Include globs are passed through; excludes are negated with '!'.
 		assert.ok(args.includes('src/**/*.ts'));
 		assert.ok(args.includes('!**/node_modules/**'));
@@ -116,5 +118,26 @@ suite('searchEngine · buildRipgrepArgs', () => {
 			['/root'],
 		);
 		assert.ok(args.includes('--engine=auto'));
+	});
+
+	test('expands a bare include so it matches anywhere and covers directory contents', () => {
+		// A user typing "src" means "everything under any src folder", like VS Code.
+		// Ripgrep matches globs relative to its cwd, not the (absolute) search root,
+		// so an unexpanded "src" / "src/**" would match nothing.
+		const args = buildRipgrepArgs(params({ filesToInclude: 'src' }), ['/root']);
+		const includes = args.filter((a, i) => args[i - 1] === '--glob');
+		assert.ok(includes.includes('**/src'));
+		assert.ok(includes.includes('**/src/**'));
+		// And never the bare, cwd-anchored form that silently matches nothing.
+		assert.ok(!includes.includes('src'));
+	});
+
+	test('applies default excludes (files.exclude / search.exclude), negated and expanded', () => {
+		const args = buildRipgrepArgs(params(), ['/root'], ['**/.git', 'node_modules']);
+		assert.ok(args.includes('!**/.git'));
+		assert.ok(args.includes('!**/.git/**'));
+		// A slashless default is expanded to match anywhere in the tree.
+		assert.ok(args.includes('!**/node_modules'));
+		assert.ok(args.includes('!**/node_modules/**'));
 	});
 });
