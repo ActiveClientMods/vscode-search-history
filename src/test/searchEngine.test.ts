@@ -93,6 +93,9 @@ suite('searchEngine · buildRipgrepArgs', () => {
 		assert.ok(!args.includes('--engine=auto'));
 		// Hidden files are searched (like VS Code), pruned back by the excludes.
 		assert.ok(args.includes('--hidden'));
+		// VS Code's default ignore scope: workspace ignores yes, global/parent no.
+		assert.ok(args.includes('--no-ignore-parent'));
+		assert.ok(args.includes('--no-ignore-global'));
 		// Include globs are passed through; excludes are negated with '!'.
 		assert.ok(args.includes('src/**/*.ts'));
 		assert.ok(args.includes('!**/node_modules/**'));
@@ -139,5 +142,29 @@ suite('searchEngine · buildRipgrepArgs', () => {
 		// A slashless default is expanded to match anywhere in the tree.
 		assert.ok(args.includes('!**/node_modules'));
 		assert.ok(args.includes('!**/node_modules/**'));
+	});
+
+	test('maps VS Code ignore-file settings to ripgrep --no-ignore flags', () => {
+		// Global and parent ignore files are off by default, so both flags appear;
+		// the catch-all --no-ignore is only for when workspace ignores are off too.
+		const def = buildRipgrepArgs(params({ isRegex: true }), ['/root']);
+		assert.ok(def.includes('--no-ignore-parent'));
+		assert.ok(def.includes('--no-ignore-global'));
+		assert.ok(!def.includes('--no-ignore'));
+
+		const all = buildRipgrepArgs(params({ isRegex: true }), ['/root'], [], {
+			useIgnoreFiles: true,
+			useGlobalIgnoreFiles: true,
+			useParentIgnoreFiles: true,
+		});
+		assert.ok(!all.includes('--no-ignore-parent'));
+		assert.ok(!all.includes('--no-ignore-global'));
+
+		const none = buildRipgrepArgs(params({ isRegex: true }), ['/root'], [], {
+			useIgnoreFiles: false,
+			useGlobalIgnoreFiles: false,
+			useParentIgnoreFiles: false,
+		});
+		assert.ok(none.includes('--no-ignore'));
 	});
 });

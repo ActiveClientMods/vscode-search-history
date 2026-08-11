@@ -4,24 +4,34 @@
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.2] - 2026-08-10
+## [1.3.1] - 2026-08-11
 
-### Fixed
+### Added
 
-- **The “files to include” field now works.** Typing an include such as `src`, `src/`, or `src/**` returned **No results found** for every form. In-view search hands globs to ripgrep as `--glob`, which matches them relative to ripgrep's working directory — but the extension searches the workspace by **absolute path** from the extension-host's own directory, so an anchored `src/**` matched nothing. Include and exclude patterns are now expanded to VS Code's own glob semantics before being handed over — a bare `src` becomes `**/src` **and** `**/src/**`, a slashless name matches anywhere in the tree — so `src`, `src/` and `src/**` all scope to the `src` folder exactly as they do in the native Search view.
-- **In-view result counts now match VS Code's Search view.** Two differences are closed:
-  - Hidden files (`.vscode/`, `.github/`, dotfiles that aren't git-ignored) were **skipped**, because ripgrep ignores dotfiles by default while VS Code searches them. The engine now passes `--hidden`.
-  - The bundled-ripgrep path ignored your `files.exclude` / `search.exclude` settings entirely (it relied on `.gitignore` alone), so `.git` and other configured folders leaked in once hidden files were searched. Both settings are now applied to **both** engines — matching VS Code, which searches hidden files but prunes `.git`, `node_modules` and the like via those excludes. On this project the pattern from 1.3.1 now reports the same 1857 matches across 40 files as the native search, and the same figures under an include/exclude.
-
-### Internal
-
-- `defaultExcludeGlobs` (the `files.exclude` / `search.exclude` reader) moved to `search/engineCore` so both the ripgrep and JS backends share one definition, and glob normalization (`normalizeSearchGlob`) is now applied consistently across the ripgrep args, the JS `findFiles` scan and the unsaved-document overlay. New `buildRipgrepArgs` tests cover the hidden-file flag, include expansion and default-exclude negation.
-
-## [1.3.1] - 2026-08-10
+- **A right-click menu on in-view results**, mirroring the most useful entries from VS Code's Search view. Right-click any file row or match row for:
+  - **Replace All** — run the same Replace All as the toolbar (after its confirmation).
+  - **Dismiss** — drop that result (or whole file) from the list; the file on disk is untouched.
+  - **Exclude File Type from Search** / **Include File Type from Search** — add `*.<ext>` for the row's file to the exclude / include field and re-run.
+  - **Copy** — copy the matched line (or, on a file row, its path).
+  - **Copy Path** — copy the file's absolute path.
+  - **Copy All** — copy every result on screen as text, grouped by file with line numbers.
+- **Absolute and workspace-relative paths in “files to include.”** The include field now accepts real paths — an absolute path (even one outside the workspace) or a `./`- / `../`-relative one — and searches _inside_ them, exactly as VS Code does, instead of treating them as name filters. Bare names like `src` remain globs.
 
 ### Fixed
 
 - **Look-around and backreference regexes no longer fail with "Invalid regular expression".** In-view search drives the bundled ripgrep with its default (Rust `regex`) engine, which rejects look-ahead/look-behind (`(?=…)`, `(?<!…)`) and backreferences (`\1`) outright — so a pattern like `(?<![\[{\-])(?<![\[{\-]\s)\b\d+(?:[.,]\d+)?\b`, which works in VS Code's own Find in Files, errored here. Regex searches now pass `--engine=auto`, keeping the fast Rust engine for ordinary patterns and transparently falling back to PCRE2 for the ones that need it — the same hybrid strategy the native Search view uses, so a pattern that matches there matches here too. (The JS fallback engine and the replace path already use JavaScript's own `RegExp`, which supports these constructs natively.)
+- **The “files to include” field now works.** Typing an include such as `src`, `src/`, or `src/**` returned **No results found** for every form. In-view search hands globs to ripgrep as `--glob`, which matches them relative to ripgrep's working directory — but the extension searches the workspace by **absolute path** from the extension-host's own directory, so an anchored `src/**` matched nothing. Include and exclude patterns are now expanded to VS Code's own glob semantics before being handed over — a bare `src` becomes `**/src` **and** `**/src/**`, a slashless name matches anywhere in the tree — so `src`, `src/` and `src/**` all scope to the `src` folder exactly as they do in the native Search view.
+- **In-view result counts now match VS Code's Search view.** Three differences are closed:
+  - Hidden files (`.vscode/`, `.github/`, dotfiles that aren't git-ignored) were **skipped**, because ripgrep ignores dotfiles by default while VS Code searches them. The engine now passes `--hidden`.
+  - The bundled-ripgrep path ignored your `files.exclude` / `search.exclude` settings entirely (it relied on `.gitignore` alone), so `.git` and other configured folders leaked in once hidden files were searched. Both settings are now applied to **both** engines — matching VS Code, which searches hidden files but prunes `.git`, `node_modules` and the like via those excludes.
+  - Ripgrep honours the user's **global** gitignore (`core.excludesFile`) and ignore files in **parent** directories by default; VS Code's Search view honours neither (its `search.useGlobalIgnoreFiles` and `search.useParentIgnoreFiles` default to off). A file ignored only by the global gitignore — e.g. `.claude/settings.local.json` — was therefore searched by VS Code but silently skipped here. The engine now reads `search.useIgnoreFiles` / `search.useGlobalIgnoreFiles` / `search.useParentIgnoreFiles` and passes the matching `--no-ignore-*` flags to ripgrep, so both agree on which files are in scope.
+
+### Internal
+
+- **Regex/PCRE2:** regex searches run through ripgrep's hybrid engine (`--engine=auto`).
+- **Glob scoping:** `defaultExcludeGlobs` (the `files.exclude` / `search.exclude` reader) and `ignoreFileSettings` (the three `search.*` ignore toggles) live in `search/engineCore`, shared by both backends. `buildRipgrepArgs` now emits `--hidden`, the expanded include/exclude globs, the negated default excludes and the `--no-ignore-*` flags — all covered by new tests. Glob normalization (`normalizeSearchGlob`) is applied consistently across the ripgrep args, the JS `findFiles` scan and the unsaved-document overlay.
+- **Include paths:** absolute / `./`-relative include entries are resolved to search roots in `search/searchEngine`, which also scopes the unsaved-document overlay to those roots.
+- **Context menu:** new host messages (`copyText`, `copyPath`, `copyAll`) back the result context menu.
 
 ## [1.3.0] - 2026-07-31
 
@@ -152,7 +162,6 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
-[1.3.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0

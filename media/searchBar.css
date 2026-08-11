@@ -282,3 +282,45 @@ body {
 	background: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.2));
 	color: var(--vscode-editor-foreground, inherit);
 }
+
+/* Right-click context menu for result rows (see searchBar.js). */
+.ctx-menu {
+	position: fixed;
+	z-index: 50;
+	min-width: 220px;
+	padding: 4px 0;
+	background: var(--vscode-menu-background, var(--vscode-dropdown-background));
+	color: var(--vscode-menu-foreground, var(--vscode-foreground));
+	border: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border, transparent));
+	border-radius: 4px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+.ctx-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	width: 100%;
+	padding: 3px 12px;
+	background: none;
+	border: none;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--vscode-font-size);
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.ctx-item:hover {
+	background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+	color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+}
+.ctx-shortcut {
+	opacity: 0.7;
+	font-size: 0.9em;
+}
+.ctx-sep {
+	height: 1px;
+	margin: 4px 0;
+	background: var(--vscode-menu-separatorBackground, var(--vscode-dropdown-border, rgba(128, 128, 128, 0.35)));
+}

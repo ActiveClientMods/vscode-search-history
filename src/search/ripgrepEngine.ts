@@ -14,13 +14,22 @@ import type { SearchParams } from '../core/types';
 import {
 	type EngineFile,
 	type EngineOutcome,
+	type IgnoreFileSettings,
 	type RunOptions,
 	defaultExcludeGlobs,
+	ignoreFileSettings,
 	previewSlice,
 	relativePath,
 	splitGlobs,
 } from './engineCore';
 import { normalizeSearchGlob } from './globMatch';
+
+/** VS Code's default ignore-file behaviour, used when no settings are supplied. */
+const DEFAULT_IGNORE: IgnoreFileSettings = {
+	useIgnoreFiles: true,
+	useGlobalIgnoreFiles: false,
+	useParentIgnoreFiles: false,
+};
 
 /** Best-effort location of the ripgrep binary bundled inside VS Code itself. */
 export function locateRipgrep(existsSync: (p: string) => boolean = fs.existsSync): string | undefined {
@@ -63,12 +72,26 @@ export function buildRipgrepArgs(
 	params: SearchParams,
 	searchPaths: string[],
 	defaultExcludes: readonly string[] = [],
+	ignore: IgnoreFileSettings = DEFAULT_IGNORE,
 ): string[] {
 	const args = ['--json'];
 	args.push(params.isCaseSensitive ? '--case-sensitive' : '--ignore-case');
 	// Search hidden files (still honouring .gitignore); `defaultExcludes` prunes
 	// `.git` etc. back out, exactly as VS Code's search does.
 	args.push('--hidden');
+	// Match VS Code's ignore-file scope: it honours workspace ignore files but,
+	// by default, neither the user's global gitignore nor ignore files in parent
+	// directories — whereas ripgrep honours all three unless told otherwise.
+	if (!ignore.useIgnoreFiles) {
+		args.push('--no-ignore');
+	} else {
+		if (!ignore.useParentIgnoreFiles) {
+			args.push('--no-ignore-parent');
+		}
+		if (!ignore.useGlobalIgnoreFiles) {
+			args.push('--no-ignore-global');
+		}
+	}
 	if (params.matchWholeWord) {
 		args.push('--word-regexp');
 	}
@@ -127,7 +150,10 @@ export function runRipgrep(
 ): Promise<EngineOutcome> {
 	const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
 	return new Promise((resolve) => {
-		const child = spawn(rgPath, buildRipgrepArgs(params, searchPaths, defaultExcludeGlobs()));
+		const child = spawn(
+			rgPath,
+			buildRipgrepArgs(params, searchPaths, defaultExcludeGlobs(), ignoreFileSettings()),
+		);
 		let matchCount = 0;
 		let fileCount = 0;
 		let truncated = false;

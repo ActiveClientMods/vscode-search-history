@@ -451,6 +451,9 @@ function renderFile(file) {
 		body.hidden = !collapsed;
 		twisty.textContent = collapsed ? '▾' : '▸';
 	});
+	head.addEventListener('contextmenu', (e) =>
+		openResultMenu(e, { kind: 'file', uri: file.uri, path: file.path, node: wrap }),
+	);
 
 	wrap.append(head, body);
 	return wrap;
@@ -487,6 +490,9 @@ function renderMatchLine(file, line) {
 			endColumn: first.endColumn,
 		});
 	});
+	row.addEventListener('contextmenu', (e) =>
+		openResultMenu(e, { kind: 'match', uri: file.uri, path: file.path, node: row, lineText: line.text }),
+	);
 	return row;
 }
 
@@ -523,6 +529,118 @@ function ellipsis() {
 	span.title = 'Line trimmed so the match stays visible';
 	return span;
 }
+
+// --- Context menu ----------------------------------------------------------
+//
+// Right-clicking a result opens a small menu mirroring the useful entries from
+// VS Code's Search view (Replace All, Dismiss, include/exclude by file type, and
+// the copy actions). The webview can't use VS Code's native menu, so this is a
+// plain floating element, dismissed on the next click, scroll, Escape or blur.
+
+let ctxMenu;
+
+function ensureCtxMenu() {
+	if (!ctxMenu) {
+		ctxMenu = document.createElement('div');
+		ctxMenu.className = 'ctx-menu';
+		ctxMenu.hidden = true;
+		document.body.appendChild(ctxMenu);
+	}
+	return ctxMenu;
+}
+
+function hideCtxMenu() {
+	if (ctxMenu) {
+		ctxMenu.hidden = true;
+		ctxMenu.replaceChildren();
+	}
+}
+
+function ctxItem(label, shortcut, onClick) {
+	const item = document.createElement('button');
+	item.type = 'button';
+	item.className = 'ctx-item';
+	const text = document.createElement('span');
+	text.textContent = label;
+	item.appendChild(text);
+	if (shortcut) {
+		const sc = document.createElement('span');
+		sc.className = 'ctx-shortcut';
+		sc.textContent = shortcut;
+		item.appendChild(sc);
+	}
+	item.addEventListener('click', (e) => {
+		e.stopPropagation();
+		hideCtxMenu();
+		onClick();
+	});
+	return item;
+}
+
+function ctxSeparator() {
+	const sep = document.createElement('div');
+	sep.className = 'ctx-sep';
+	return sep;
+}
+
+function fileExt(p) {
+	const base = p.split(/[\\/]/).pop() || '';
+	const dot = base.lastIndexOf('.');
+	return dot > 0 ? base.slice(dot + 1) : '';
+}
+
+// Add a glob to the include/exclude field (unless already present) and re-run.
+function addGlobAndRun(input, glob) {
+	const parts = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+	if (!parts.includes(glob)) parts.push(glob);
+	input.value = parts.join(', ');
+	if (!detailsVisible) { detailsVisible = true; renderDetails(); }
+	persist();
+	submit(true);
+}
+
+// Remove a result from the view (client-side only — the file on disk is untouched).
+function dismissResult(node) {
+	const fileWrap = node.classList.contains('file') ? node : node.closest('.file');
+	node.remove();
+	if (fileWrap && fileWrap.isConnected && fileWrap.querySelectorAll('.match').length === 0) {
+		fileWrap.remove();
+	}
+	if (els.results.querySelectorAll('.match').length === 0) {
+		hasResults = false;
+		renderReplaceEnabled();
+	}
+}
+
+function openResultMenu(e, ctx) {
+	e.preventDefault();
+	e.stopPropagation();
+	const menu = ensureCtxMenu();
+	menu.replaceChildren();
+	menu.appendChild(ctxItem('Replace All', 'Ctrl+Shift+1', requestReplaceAll));
+	menu.appendChild(ctxItem('Dismiss', 'Del', () => dismissResult(ctx.node)));
+	const ext = fileExt(ctx.path);
+	if (ext) {
+		menu.appendChild(ctxItem('Exclude File Type from Search', '', () => addGlobAndRun(els.exclude, '*.' + ext)));
+		menu.appendChild(ctxItem('Include File Type from Search', '', () => addGlobAndRun(els.include, '*.' + ext)));
+	}
+	menu.appendChild(ctxSeparator());
+	const copyText = ctx.kind === 'match' ? ctx.lineText : ctx.path;
+	menu.appendChild(ctxItem('Copy', 'Ctrl+C', () => vscode.postMessage({ type: 'copyText', text: copyText })));
+	menu.appendChild(ctxItem('Copy Path', 'Shift+Alt+C', () => vscode.postMessage({ type: 'copyPath', uri: ctx.uri })));
+	menu.appendChild(ctxItem('Copy All', '', () => vscode.postMessage({ type: 'copyAll' })));
+
+	menu.hidden = false;
+	const rect = menu.getBoundingClientRect();
+	menu.style.left = Math.max(2, Math.min(e.clientX, window.innerWidth - rect.width - 4)) + 'px';
+	menu.style.top = Math.max(2, Math.min(e.clientY, window.innerHeight - rect.height - 4)) + 'px';
+}
+
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('contextmenu', hideCtxMenu); // a right-click elsewhere closes ours
+document.addEventListener('scroll', hideCtxMenu, true);
+window.addEventListener('blur', hideCtxMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCtxMenu(); });
 
 // --- Host messages ---------------------------------------------------------
 

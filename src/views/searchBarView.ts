@@ -60,7 +60,10 @@ type InboundMessage =
 	| { type: 'replaceTextChanged'; replaceText: string }
 	| { type: 'replaceAll' }
 	| { type: 'replaceFile'; uri: string }
-	| { type: 'replaceMatches'; uri: string; matches: MatchLocation[] };
+	| { type: 'replaceMatches'; uri: string; matches: MatchLocation[] }
+	| { type: 'copyText'; text: string }
+	| { type: 'copyPath'; uri: string }
+	| { type: 'copyAll' };
 
 /** Messages the extension host sends to the webview. */
 type OutboundMessage =
@@ -184,6 +187,15 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 					return;
 				case 'replaceMatches':
 					void this.replaceIn([message.uri], new Map([[message.uri, message.matches]]));
+					return;
+				case 'copyText':
+					void vscode.env.clipboard.writeText(message.text);
+					return;
+				case 'copyPath':
+					void this.copyPath(message.uri);
+					return;
+				case 'copyAll':
+					void this.copyAllResults();
 					return;
 			}
 		});
@@ -479,6 +491,36 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 
 	private totalMatches(): number {
 		return this.lastFiles.reduce((sum, file) => sum + file.matches.length, 0);
+	}
+
+	// --- Clipboard -----------------------------------------------------------
+
+	/** Copy a file's absolute path (VS Code's "Copy Path"). */
+	private async copyPath(uri: string): Promise<void> {
+		await vscode.env.clipboard.writeText(vscode.Uri.parse(uri).fsPath);
+	}
+
+	/**
+	 * Copy every result on screen as plain text, grouped by file with each matching
+	 * line prefixed by its line number — the shape VS Code's "Copy All" produces.
+	 */
+	private async copyAllResults(): Promise<void> {
+		const blocks: string[] = [];
+		for (const file of this.lastFiles) {
+			const rows: string[] = [file.relativePath];
+			const seen = new Set<number>();
+			for (const match of file.matches) {
+				if (seen.has(match.line)) {
+					continue; // one row per line even when it has several hits
+				}
+				seen.add(match.line);
+				rows.push(`  ${match.line}: ${match.preview.trim()}`);
+			}
+			blocks.push(rows.join('\n'));
+		}
+		if (blocks.length > 0) {
+			await vscode.env.clipboard.writeText(`${blocks.join('\n\n')}\n`);
+		}
 	}
 
 	// --- Rendering -----------------------------------------------------------

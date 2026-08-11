@@ -80,6 +80,33 @@ export function defaultExcludeGlobs(): string[] {
 	return [...out];
 }
 
+/** Which ignore files a search honours, mirroring VS Code's `search.*` settings. */
+export interface IgnoreFileSettings {
+	/** `.gitignore` / `.ignore` in the workspace. Default on. */
+	useIgnoreFiles: boolean;
+	/** The user's global git ignore (`core.excludesFile`). Default **off**. */
+	useGlobalIgnoreFiles: boolean;
+	/** Ignore files in directories above the workspace root. Default **off**. */
+	useParentIgnoreFiles: boolean;
+}
+
+/**
+ * Read the three `search.*` ignore-file settings with VS Code's own defaults.
+ *
+ * Ripgrep honours all three by default, but VS Code's Search view honours only
+ * the workspace ignore files — so a file ignored solely by the user's *global*
+ * gitignore (e.g. `.claude/settings.local.json`) shows up in the native search
+ * yet was silently skipped here. Reading these lets the engines match it.
+ */
+export function ignoreFileSettings(): IgnoreFileSettings {
+	const cfg = vscode.workspace.getConfiguration('search');
+	return {
+		useIgnoreFiles: cfg.get<boolean>('useIgnoreFiles', true),
+		useGlobalIgnoreFiles: cfg.get<boolean>('useGlobalIgnoreFiles', false),
+		useParentIgnoreFiles: cfg.get<boolean>('useParentIgnoreFiles', false),
+	};
+}
+
 /**
  * The slice of a matched line worth sending on, together with the column it
  * starts at.

@@ -11,6 +11,9 @@
 // backend's output and re-scanned from the in-memory document instead — see
 // {@link scanDirtyDocuments}.
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
 import type { SearchParams } from '../core/types';
@@ -20,12 +23,13 @@ import {
 	type EngineMatch,
 	type EngineOutcome,
 	type RunOptions,
+	defaultExcludeGlobs,
 	previewSlice,
 	relativePath,
 	splitGlobs,
 } from './engineCore';
 import { isInSearchScope } from './globMatch';
-import { buildLineRegExp, defaultExcludeGlobs, matchLine, runJsSearch } from './jsEngine';
+import { buildLineRegExp, matchLine, runJsSearch } from './jsEngine';
 import { locateRipgrep, runRipgrep } from './ripgrepEngine';
 
 // Re-export the shared surface so callers and tests have a single import site.
@@ -47,8 +51,22 @@ export async function runSearch(params: SearchParams, opts: RunOptions): Promise
 		return { ...EMPTY, error: 'Open a folder to search in.' };
 	}
 
+	// An include field may name concrete paths (absolute, or `./`-relative to the
+	// workspace) rather than globs — VS Code treats those as *where* to search, not
+	// as a filter. Split them out into search roots; the remaining globs stay in the
+	// include field.
+	const resolved = resolveIncludePaths(params.filesToInclude, folders);
+	if (resolved.hadPathSpecs && resolved.roots.length === 0) {
+		return EMPTY; // every named path was missing — nothing to search
+	}
+	const searchPaths = resolved.hadPathSpecs ? resolved.roots : folders.map((f) => f.uri.fsPath);
+	const effectiveParams =
+		resolved.includeField === params.filesToInclude
+			? params
+			: { ...params, filesToInclude: resolved.includeField };
+
 	// Files whose editor has unsaved changes are handled separately, below.
-	const dirty = dirtyDocuments();
+	const dirty = dirtyDocuments(searchPaths);
 	let fileCount = 0;
 	let matchCount = 0;
 	const emit = (file: EngineFile) => {
@@ -62,14 +80,14 @@ export async function runSearch(params: SearchParams, opts: RunOptions): Promise
 
 	const rg = locateRipgrep();
 	const outcome = rg
-		? await runRipgrep(rg, params, folders.map((f) => f.uri.fsPath), { ...opts, onFile: emit })
-		: await runJsSearch(params, { ...opts, onFile: emit });
+		? await runRipgrep(rg, effectiveParams, searchPaths, { ...opts, onFile: emit })
+		: await runJsSearch(effectiveParams, { ...opts, onFile: emit });
 
 	if (opts.token.isCancellationRequested || outcome.error) {
 		return { ...outcome, fileCount, matchCount };
 	}
 
-	const overlay = scanDirtyDocuments([...dirty.values()], params, {
+	const overlay = scanDirtyDocuments([...dirty.values()], effectiveParams, {
 		...opts,
 		maxMatches: Math.max(0, opts.maxMatches - matchCount),
 		onFile: (file) => {
@@ -87,19 +105,64 @@ export async function runSearch(params: SearchParams, opts: RunOptions): Promise
 	};
 }
 
-/** Open documents with unsaved changes that a workspace search could reach, by URI. */
-function dirtyDocuments(): Map<string, vscode.TextDocument> {
+/** Open documents with unsaved changes that a search over `searchPaths` could reach, by URI. */
+function dirtyDocuments(searchPaths: readonly string[]): Map<string, vscode.TextDocument> {
 	const out = new Map<string, vscode.TextDocument>();
 	for (const document of vscode.workspace.textDocuments) {
 		if (
 			document.isDirty &&
 			document.uri.scheme === 'file' &&
-			vscode.workspace.getWorkspaceFolder(document.uri) !== undefined
+			searchPaths.some((root) => isUnder(document.uri.fsPath, root))
 		) {
 			out.set(document.uri.toString(), document);
 		}
 	}
 	return out;
+}
+
+/** True when `target` is `root` itself or lives somewhere beneath it. */
+function isUnder(target: string, root: string): boolean {
+	const rel = path.relative(root, target);
+	return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** Does a raw include entry name a concrete path (absolute or `./`-relative) rather than a glob? */
+function isPathSpec(spec: string): boolean {
+	return path.isAbsolute(spec) || spec === '.' || spec === '..' || /^\.\.?[/\\]/.test(spec);
+}
+
+/**
+ * Separate the include field into concrete search roots and leftover globs.
+ *
+ * VS Code lets the "files to include" field hold real paths — an absolute path,
+ * or one relative to the workspace (`./src`, `../sibling`) — and searches *inside*
+ * them rather than treating them as name filters. Absolute paths may even point
+ * outside the workspace. Resolved roots are filtered to those that exist so a
+ * typo can't make ripgrep error out; a bare name like `src` stays a glob.
+ */
+function resolveIncludePaths(
+	filesToInclude: string,
+	folders: readonly vscode.WorkspaceFolder[],
+): { roots: string[]; includeField: string; hadPathSpecs: boolean } {
+	const roots: string[] = [];
+	const globs: string[] = [];
+	let hadPathSpecs = false;
+	for (const spec of splitGlobs(filesToInclude)) {
+		if (!isPathSpec(spec)) {
+			globs.push(spec);
+			continue;
+		}
+		hadPathSpecs = true;
+		const candidates = path.isAbsolute(spec)
+			? [path.normalize(spec)]
+			: folders.map((f) => path.resolve(f.uri.fsPath, spec));
+		for (const candidate of candidates) {
+			if (fs.existsSync(candidate) && !roots.includes(candidate)) {
+				roots.push(candidate);
+			}
+		}
+	}
+	return { roots, includeField: globs.join(', '), hadPathSpecs };
 }
 
 /**
