@@ -1,8 +1,27 @@
-<!-- markdownlint-disable MD024 -->
+<!-- markdownlint-disable MD024 MD038 -->
 
 # Change Log
 
 All notable changes to the **Search History Explorer** extension are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.3.2] - 2026-08-26
+
+### Changed
+
+- **In-view results are now listed in path order (A→Z).** Both backends report each file the moment they finish reading it, and ripgrep searches in parallel — so the same search returned the same files in a different order nearly every run (five consecutive runs over this repository produced five different orders). Since the list re-runs itself on every edit, save and replace, rows that had not changed at all kept jumping around under the cursor. Files are now compared like a file explorer would — case-insensitively, digit runs by value (`item2` before `item10`), directory by directory — so the list is a stable function of the matches and a re-run only moves what actually changed. Results still stream in as they are found: each file is spliced into its sorted position rather than buffered until the end.
+  - This is deliberately **not** configurable. The only alternative ordering the code ever had is "whatever order the engine finished in", which is precisely the bug; path order is also what VS Code's own Search view does, and it offers no sort setting either. A ranking such as "most matches first" can be added later if it is ever actually wanted.
+
+### Fixed
+
+- **Whole-word replace rewrote the wrong occurrence.** The results list comes from ripgrep, but every replacement is computed with JavaScript's `RegExp` — and the two disagreed about **Match Whole Word** whenever the query did not begin or end with a word character. Wrapping the query as `\b(?:…)\b` demands a word character _before_ a leading `-`, so searching `-foo` listed the ` -foo` in `bar -foo` (as ripgrep, and VS Code, do) while Replace All silently rewrote the `-foo` inside `x-foo` instead. Queries such as `foo!`, `(foo)` or `$price` were listed but could not be replaced at all ("Nothing to replace — the results were out of date"). Whole-word matching is now compiled the way ripgrep's `--word-regexp` actually behaves, with Unicode-aware boundaries — so `str` is no longer a whole word inside `strüber` either. Every other combination (Match Case, Regex, capture groups, look-around, back-references, anchors, tabs, non-ASCII) was checked against ripgrep and already agreed.
+- **Dismissing a result did not stop it from being replaced.** _Dismiss_ removed the row from the list but never told the extension host, so Replace All (and replace-in-file) went on rewriting the occurrence that was no longer on screen. A dismissal now reaches the host: the row is dropped from the retained result set, and a replace across a file with dismissed rows is narrowed to the ones still listed.
+- **Typing a replacement and pressing Enter straight away replaced with the previous text.** The replacement field is debounced by 200 ms before it reaches the host, and nothing flushed it — so a fast Enter (or a click on a row's replace icon) replaced using whatever the host had last heard, usually the empty string, i.e. deleting the matches. Every replace action now flushes the pending replacement text first.
+
+### Internal
+
+- New pure, unit-tested `search/resultOrder` (`compareResultPaths`, `insertByPath`). The wire format gained `WireFile.index` — the slot a streamed file occupies in the sorted list — so the ordering rule lives in one place and the webview simply splices each row in; a new `dismiss` host message keeps the host's retained results in step with what the list shows.
+- `buildLineRegExp` builds whole-word boundaries as `(?<![\p{L}\p{N}_])…(?![\p{L}\p{N}_])`, falling back to `\w` for patterns the `u` flag rejects.
+- New `resultOrder` tests, whole-word boundary cases in the replace-engine tests, and integration tests for path ordering, punctuation-flanked whole-word replace and dismiss-then-replace.
 
 ## [1.3.1] - 2026-08-11
 
@@ -162,6 +181,7 @@ All notable changes to the **Search History Explorer** extension are documented 
 - Replaced ESLint / typescript-eslint with **oxlint**.
 - Pinned TypeScript to `7.0.2`.
 
+[1.3.2]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.3.0
 [1.2.0]: https://github.com/ActiveClientMods/vscode-search-history/releases/tag/v1.2.0

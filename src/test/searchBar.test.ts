@@ -90,6 +90,18 @@ suite('searchBar · in-view search, replace and staleness', () => {
 		return { done, files };
 	}
 
+	/**
+	 * The order the rows actually appear in: results stream in one message per
+	 * file, each carrying the slot the webview splices it into.
+	 */
+	function listedOrder(files: any[]): string[] {
+		const out: string[] = [];
+		for (const file of files) {
+			out.splice(file.index, 0, file.path);
+		}
+		return out;
+	}
+
 	function fileFor(files: any[], uri: vscode.Uri): any {
 		const found = files.find((f) => f.uri === uri.toString());
 		assert.ok(found, `expected results for ${uri.fsPath}, got ${files.map((f) => f.path).join(', ')}`);
@@ -116,6 +128,19 @@ suite('searchBar · in-view search, replace and staleness', () => {
 		assert.ok(
 			client.includes('input === els.replace'),
 			'Enter inside the Replace field must be routed to replace',
+		);
+	});
+
+	test('the client keeps the host in step with the list on screen', async () => {
+		const client = await fs.readFile(path.join(extensionPath, 'media', 'searchBar.js'), 'utf8');
+		// Rows are spliced in at the index the host sends, not appended in arrival order.
+		assert.ok(client.includes('els.results.children[file.index]'), 'the client must insert rows by index');
+		// Dismissing has to reach the host, or Replace All still rewrites the row.
+		assert.ok(client.includes("type: 'dismiss'"), 'the client must tell the host about a dismissal');
+		// The replacement text is debounced, so a replace action has to flush it first.
+		assert.ok(
+			/flushReplaceText\(\);\s*vscode\.postMessage\(\{\s*type:\s*'replaceAll'/.test(client),
+			'a replace request must flush the pending replacement text',
 		);
 	});
 
@@ -183,6 +208,68 @@ suite('searchBar · in-view search, replace and staleness', () => {
 		const done = await finished;
 
 		assert.strictEqual(done.matchCount, 0, 'the replaced text must no longer match');
+	});
+
+	test('a whole-word query flanked by punctuation replaces what was listed', async () => {
+		// The results come from ripgrep, the replacement from a JavaScript RegExp:
+		// for a whole-word query that does not start with a word character the two
+		// used to pick *different* occurrences, so the replacement landed on text
+		// that had never been shown as a match.
+		const uri = await writeFile('tmp-word.txt', 'call (foo) now\nx-foo and -foo\n');
+		const p = params({ query: '-foo', matchWholeWord: true, replaceText: 'Z' });
+		const { done, files } = await search(p);
+		assert.strictEqual(done.matchCount, 1, 'only the standalone -foo is a whole word');
+
+		const finished = fake.nextMessage('replaceDone');
+		fake.send({ type: 'replaceFile', uri: fileFor(files, uri).uri });
+		assert.match((await finished).message, /Replaced 1 occurrence/);
+		assert.strictEqual(
+			(await vscode.workspace.openTextDocument(uri)).getText(),
+			'call (foo) now\nx-foo and Z\n',
+		);
+	});
+
+	test('a dismissed row is not replaced by a later Replace All', async () => {
+		const uri = await writeFile('tmp-dismiss.txt', 'kiwi one\nkiwi two\n');
+		const { files } = await search(params({ query: 'kiwi', replaceText: 'plum' }));
+		const file = fileFor(files, uri);
+
+		fake.send({ type: 'dismiss', uri: file.uri, line: 1 });
+		const finished = fake.nextMessage('replaceDone');
+		fake.send({ type: 'replaceFile', uri: file.uri });
+		await finished;
+
+		assert.strictEqual(
+			(await vscode.workspace.openTextDocument(uri)).getText(),
+			'kiwi one\nplum two\n',
+			'the dismissed occurrence must be left alone',
+		);
+	});
+
+	// --- Result order --------------------------------------------------------
+
+	test('files are listed in path order, however the engine finds them', async () => {
+		// Both backends report files as they finish them, and ripgrep searches in
+		// parallel — so without sorting the same search lists the same files in a
+		// different order nearly every run, and every automatic re-run reshuffles
+		// the list under the cursor.
+		for (const name of ['tmp-order-z.txt', 'tmp-order-a.txt', 'tmp-order-m.txt']) {
+			await writeFile(name, 'orderable\n');
+		}
+		const p = params({ query: 'orderable' });
+		const first = await search(p);
+		assert.deepStrictEqual(listedOrder(first.files), [
+			'tmp-order-a.txt',
+			'tmp-order-m.txt',
+			'tmp-order-z.txt',
+		]);
+
+		const second = await search(p);
+		assert.deepStrictEqual(
+			listedOrder(second.files),
+			listedOrder(first.files),
+			're-running the same search must produce the same list',
+		);
 	});
 
 	// --- Stale results -------------------------------------------------------

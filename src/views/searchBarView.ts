@@ -9,6 +9,7 @@ import {
 } from '../search/replaceEngine';
 import type { HistoryStore } from '../core/storage';
 import type { SearchHistoryEntry, SearchParams } from '../core/types';
+import { insertByPath } from '../search/resultOrder';
 import { buildPreviewWindow } from './resultPreview';
 import { buildSearchBarHtml, makeNonce } from './searchBarHtml';
 
@@ -46,6 +47,12 @@ interface WireFile {
 	path: string;
 	matchCount: number;
 	lines: WireLine[];
+	/**
+	 * Where this file belongs in the (path-sorted) list. Results stream in as each
+	 * file is finished, so the webview splices each row into place rather than
+	 * appending it; sending the index keeps the ordering rule in one place.
+	 */
+	index: number;
 }
 
 /** Messages the webview sends to the extension host. */
@@ -61,6 +68,7 @@ type InboundMessage =
 	| { type: 'replaceAll' }
 	| { type: 'replaceFile'; uri: string }
 	| { type: 'replaceMatches'; uri: string; matches: MatchLocation[] }
+	| { type: 'dismiss'; uri: string; line?: number }
 	| { type: 'copyText'; text: string }
 	| { type: 'copyPath'; uri: string }
 	| { type: 'copyAll' };
@@ -120,8 +128,17 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	private lastParams?: SearchParams;
 	/** Whether {@link lastParams} has already been persisted to history. */
 	private lastParamsSaved = false;
-	/** The result set currently on screen — kept for replace and re-rendering. */
+	/**
+	 * The result set currently on screen — kept for replace and re-rendering, and
+	 * held in path order so it reads the same way the list does.
+	 */
 	private lastFiles: EngineFile[] = [];
+	/**
+	 * Files the user dismissed *some* rows from. Replacing across them has to be
+	 * narrowed to the surviving matches, or Replace All would rewrite occurrences
+	 * that are no longer on screen.
+	 */
+	private partlyDismissed = new Set<string>();
 	/**
 	 * Set whenever something could have changed the matches (an edit, a file
 	 * event) since the displayed results were produced. While the view is on
@@ -183,10 +200,13 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 					void this.replaceAll();
 					return;
 				case 'replaceFile':
-					void this.replaceIn([message.uri]);
+					void this.replaceIn([message.uri], this.dismissedAwareLocations([message.uri]));
 					return;
 				case 'replaceMatches':
 					void this.replaceIn([message.uri], new Map([[message.uri, message.matches]]));
+					return;
+				case 'dismiss':
+					this.dismiss(message.uri, message.line);
 					return;
 				case 'copyText':
 					void vscode.env.clipboard.writeText(message.text);
@@ -249,6 +269,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		// Nothing is on screen any more, so there is nothing to replace across and
 		// nothing a pending invalidation could usefully refresh.
 		this.lastFiles = [];
+		this.partlyDismissed.clear();
 		this.resultsStale = false;
 		void this.post({ type: 'clearInputs' });
 	}
@@ -388,6 +409,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		this.searchTokens = tokens;
 		this.lastParams = params;
 		this.lastFiles = [];
+		this.partlyDismissed.clear();
 		// Cleared up front: anything that changes *during* the run must still count
 		// as stale, or a concurrent edit would be swallowed by this refresh.
 		this.resultsStale = false;
@@ -403,8 +425,10 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			token: tokens.token,
 			onFile: (file) => {
 				if (!tokens.token.isCancellationRequested) {
-					this.lastFiles.push(file);
-					void this.post({ type: 'results', files: [this.toWireFile(file)] });
+					// Kept sorted as it streams: the row goes straight to where it
+					// belongs instead of wherever the backend happened to finish it.
+					const index = insertByPath(this.lastFiles, file);
+					void this.post({ type: 'results', files: [this.toWireFile(file, index)] });
 				}
 			},
 		});
@@ -434,7 +458,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 			return; // nothing on screen, or too much of it to preview
 		}
 		await this.post({ type: 'searchStarted' });
-		await this.post({ type: 'results', files: this.lastFiles.map((f) => this.toWireFile(f)) });
+		await this.post({ type: 'results', files: this.lastFiles.map((f, i) => this.toWireFile(f, i)) });
 		await this.post({
 			type: 'searchDone',
 			fileCount: this.lastFiles.length,
@@ -460,7 +484,49 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 		if (confirm !== 'Replace All') {
 			return;
 		}
-		await this.replaceIn(this.lastFiles.map((f) => f.uri.toString()));
+		const uris = this.lastFiles.map((f) => f.uri.toString());
+		await this.replaceIn(uris, this.dismissedAwareLocations(uris));
+	}
+
+	/**
+	 * Drop a result the user dismissed, mirroring what the webview just removed
+	 * from the list. Without this the host keeps handing the dismissed rows to
+	 * Replace All, which would rewrite text that is no longer on screen — and the
+	 * indices the webview splices new rows into would drift out of step.
+	 */
+	private dismiss(uri: string, line?: number): void {
+		const index = this.lastFiles.findIndex((f) => f.uri.toString() === uri);
+		if (index === -1) {
+			return;
+		}
+		const file = this.lastFiles[index];
+		if (line !== undefined) {
+			file.matches = file.matches.filter((m) => m.line !== line);
+		}
+		if (line === undefined || file.matches.length === 0) {
+			this.lastFiles.splice(index, 1);
+			this.partlyDismissed.delete(uri);
+		} else {
+			this.partlyDismissed.add(uri);
+		}
+	}
+
+	/**
+	 * Occurrence lists for the files a replace should be narrowed to. Only files
+	 * with dismissed rows get one: everywhere else, replacing every current match
+	 * is both what the user asked for and robust against the file having moved on
+	 * since the search ran.
+	 */
+	private dismissedAwareLocations(uris: readonly string[]): Map<string, MatchLocation[]> | undefined {
+		const locations = new Map<string, MatchLocation[]>();
+		for (const uri of uris) {
+			if (!this.partlyDismissed.has(uri)) {
+				continue;
+			}
+			const file = this.lastFiles.find((f) => f.uri.toString() === uri);
+			locations.set(uri, (file?.matches ?? []).map((m) => ({ line: m.line, column: m.column })));
+		}
+		return locations.size === 0 ? undefined : locations;
 	}
 
 	/**
@@ -529,7 +595,7 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 	 * Project one file's matches into the shape the webview renders: grouped by
 	 * line and windowed so the match itself is always inside the visible slice.
 	 */
-	private toWireFile(file: EngineFile): WireFile {
+	private toWireFile(file: EngineFile, index: number): WireFile {
 		const showPreview =
 			this.lastParams !== undefined &&
 			this.lastParams.replaceText !== '' &&
@@ -570,7 +636,13 @@ export class SearchBarViewProvider implements vscode.WebviewViewProvider {
 				})),
 			});
 		}
-		return { uri: file.uri.toString(), path: file.relativePath, matchCount: file.matches.length, lines };
+		return {
+			uri: file.uri.toString(),
+			path: file.relativePath,
+			matchCount: file.matches.length,
+			lines,
+			index,
+		};
 	}
 
 	/**

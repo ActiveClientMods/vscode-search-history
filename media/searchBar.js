@@ -185,8 +185,18 @@ function schedulePreview() {
 	typeTimer = setTimeout(() => submit(false), searchOnTypeDelay);
 }
 
+// The replacement text is only sent to the host after a short debounce, so
+// typing one and pressing Enter straight away would replace with whatever the
+// host last heard — often nothing at all. Every replace action flushes it first;
+// messages arrive in order, so the host always has the current text.
+function flushReplaceText() {
+	clearTimeout(replaceTextTimer);
+	vscode.postMessage({ type: 'replaceTextChanged', replaceText: els.replace.value });
+}
+
 function requestReplaceAll() {
 	if (!hasResults) { els.query.focus(); return; }
+	flushReplaceText();
 	vscode.postMessage({ type: 'replaceAll' });
 }
 
@@ -436,7 +446,7 @@ function renderFile(file) {
 		'icon-btn row-action',
 		ICON_REPLACE_ALL,
 		'Replace every match in this file',
-		() => vscode.postMessage({ type: 'replaceFile', uri: file.uri }),
+		() => { flushReplaceText(); vscode.postMessage({ type: 'replaceFile', uri: file.uri }); },
 	);
 	head.append(twisty, name, replaceInFile, count);
 
@@ -476,7 +486,10 @@ function renderMatchLine(file, line) {
 		'icon-btn row-action',
 		count === 1 ? ICON_REPLACE : ICON_REPLACE_ALL,
 		count === 1 ? 'Replace this match' : `Replace ${count} matches on this line`,
-		() => vscode.postMessage({ type: 'replaceMatches', uri: file.uri, matches: line.matches }),
+		() => {
+			flushReplaceText();
+			vscode.postMessage({ type: 'replaceMatches', uri: file.uri, matches: line.matches });
+		},
 	);
 
 	row.append(ln, text, action);
@@ -491,7 +504,14 @@ function renderMatchLine(file, line) {
 		});
 	});
 	row.addEventListener('contextmenu', (e) =>
-		openResultMenu(e, { kind: 'match', uri: file.uri, path: file.path, node: row, lineText: line.text }),
+		openResultMenu(e, {
+			kind: 'match',
+			uri: file.uri,
+			path: file.path,
+			node: row,
+			line: line.line,
+			lineText: line.text,
+		}),
 	);
 	return row;
 }
@@ -599,8 +619,12 @@ function addGlobAndRun(input, glob) {
 	submit(true);
 }
 
-// Remove a result from the view (client-side only — the file on disk is untouched).
-function dismissResult(node) {
+// Remove a result from the view — the file on disk is untouched, but the host
+// has to forget it too, or Replace All would still rewrite the dismissed match
+// and the indices it sends for new rows would no longer line up with the list.
+function dismissResult(ctx) {
+	vscode.postMessage({ type: 'dismiss', uri: ctx.uri, line: ctx.kind === 'match' ? ctx.line : undefined });
+	const node = ctx.node;
 	const fileWrap = node.classList.contains('file') ? node : node.closest('.file');
 	node.remove();
 	if (fileWrap && fileWrap.isConnected && fileWrap.querySelectorAll('.match').length === 0) {
@@ -618,7 +642,7 @@ function openResultMenu(e, ctx) {
 	const menu = ensureCtxMenu();
 	menu.replaceChildren();
 	menu.appendChild(ctxItem('Replace All', 'Ctrl+Shift+1', requestReplaceAll));
-	menu.appendChild(ctxItem('Dismiss', 'Del', () => dismissResult(ctx.node)));
+	menu.appendChild(ctxItem('Dismiss', 'Del', () => dismissResult(ctx)));
 	const ext = fileExt(ctx.path);
 	if (ext) {
 		menu.appendChild(ctxItem('Exclude File Type from Search', '', () => addGlobAndRun(els.exclude, '*.' + ext)));
@@ -668,8 +692,11 @@ window.addEventListener('message', (event) => {
 			els.statusText.textContent = 'Searching…';
 			break;
 		case 'results':
+			// Files arrive as the engine finishes them, in no particular order, but
+			// each carries the slot it occupies in the path-sorted list — so splice
+			// it in there rather than appending it.
 			for (const file of msg.files) {
-				els.results.appendChild(renderFile(file));
+				els.results.insertBefore(renderFile(file), els.results.children[file.index] || null);
 				if (file.matchCount > 0) hasResults = true;
 			}
 			renderReplaceEnabled();

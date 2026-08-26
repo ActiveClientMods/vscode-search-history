@@ -106,6 +106,56 @@ suite('replaceEngine · planReplacements', () => {
 		);
 	});
 
+	// Whole-word replacements have to hit exactly what ripgrep listed as a match.
+	// A `\b`-wrapped pattern does not: `\b(?:-foo)\b` demands a word character
+	// *before* the hyphen, so it used to rewrite the one occurrence ripgrep had
+	// not shown while leaving the one it had.
+	test('a whole-word query starting with a non-word character matches like ripgrep', () => {
+		assert.deepStrictEqual(
+			applied(['x-foo and -foo'], params({ query: '-foo', matchWholeWord: true, replaceText: 'Z' })),
+			['x-foo and Z'],
+		);
+	});
+
+	test('a whole-word query ending with a non-word character still matches', () => {
+		assert.deepStrictEqual(
+			applied(['foo! and foo'], params({ query: 'foo!', matchWholeWord: true, replaceText: 'Z' })),
+			['Z and foo'],
+		);
+	});
+
+	test('a whole-word query wrapped in punctuation still matches', () => {
+		assert.deepStrictEqual(
+			applied(['call (foo) now'], params({ query: '(foo)', matchWholeWord: true, replaceText: 'Z' })),
+			['call Z now'],
+		);
+	});
+
+	test('an accented letter counts as part of the word', () => {
+		// JavaScript's `\w` is ASCII-only, ripgrep's is not: without a Unicode-aware
+		// boundary, "na" would be a whole word inside "naïve".
+		assert.deepStrictEqual(
+			applied(['naïve na'], params({ query: 'na', matchWholeWord: true, replaceText: 'Z' })),
+			['naïve Z'],
+		);
+	});
+
+	test('whole word combines with regex and case sensitivity', () => {
+		assert.deepStrictEqual(
+			applied(
+				['Total total2 total'],
+				params({
+					query: 'total\\d*',
+					isRegex: true,
+					matchWholeWord: true,
+					isCaseSensitive: true,
+					replaceText: 'Z',
+				}),
+			),
+			['Total Z Z'],
+		);
+	});
+
 	test('an empty replacement deletes the match', () => {
 		assert.deepStrictEqual(applied(['a needle b'], params({ replaceText: '' })), ['a  b']);
 	});
